@@ -30,7 +30,7 @@ The stock Hermes memory providers (Honcho, Hindsight, Mem0, etc.) are single clo
 ## Install
 
 ```bash
-hermes plugins install github:chrisluersen/hermes-wiki-memory --enable
+hermes plugins install chrisluersen/hermes-wiki-memory --enable
 hermes config set memory.provider wiki
 hermes config set memory.wiki.wiki_context_cap 1200   # optional: per-turn recall budget
 ```
