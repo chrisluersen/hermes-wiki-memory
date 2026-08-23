@@ -7,9 +7,13 @@ together; install all of them or the recall layer is incomplete:
 | # | Piece | Where | What it does |
 |---|---|---|---|
 | 1 | **Memory provider** | `__init__.py` + `wiki_client.py` | per-turn semantic recall + session persistence |
-| 2 | **gbrain** | `skills/gbrain-integration.SKILL.md` | installs gbrain, builds the PGLite knowledge graph, wires gbrain MCP tools |
-| 3 | **The wiki** | `skills/llm-wiki.SKILL.md` | Karpathy-pattern interlinked markdown KB (your actual knowledge base) |
-| 4 | **Maintenance** | `skills/wiki-maintenance.SKILL.md` | cron-driven health pipeline: sync, embed, extract, doctor |
+| 2 | **gbrain** | Hermes skill `gbrain-integration` | installs gbrain, builds the knowledge graph, wires gbrain MCP tools |
+| 3 | **The wiki** | Hermes skill `llm-wiki` | Karpathy-pattern interlinked markdown KB (your actual knowledge base) |
+| 4 | **Maintenance** | Hermes skill `wiki-maintenance` | cron-driven health pipeline: sync, embed, extract, doctor |
+
+The three skills (2–4) ship with Hermes Agent — install them from your skill catalog:
+`gbrain-integration`, `llm-wiki`, `wiki-maintenance`. This plugin provides piece 1,
+the memory provider that ties them together.
 
 Why this beats the stock providers: the knowledge base is a **human-curated,
 git-versioned markdown wiki you own** — with provenance and cross-links — instead
@@ -41,16 +45,16 @@ hermes memory status     # Provider: wiki / Plugin: installed / Status: availabl
 ```bash
 bun install -g github:garrytan/gbrain
 # gbrain installs its skills to ~/.bun/install/global/node_modules/gbrain/skills
-# Follow the gbrain-integration skill for the PGLite brain + MCP tool wiring
+# Follow the gbrain-integration skill for the knowledge graph + MCP tool wiring
 ```
 
-The `gbrain-integration` skill (ships in `skills/`) covers the full Windows setup:
-install gbrain, create the PGLite brain from your wiki, and expose gbrain's
-`search`/`think` as MCP tools in Hermes.
+The `gbrain-integration` skill (installed from your Hermes skill catalog) covers
+the full setup: install gbrain, create the knowledge graph from your wiki, and
+expose gbrain's `search`/`think` as MCP tools in Hermes.
 
 ## 3. Scaffold the wiki
 
-Follow `skills/llm-wiki.SKILL.md` (Karpathy pattern): a plain markdown dir
+Follow the `llm-wiki` skill (Karpathy pattern): a plain markdown dir
 (no DB) of interlinked pages. Canonical structure when the wiki is used with the
 tracking system:
 
@@ -68,7 +72,7 @@ this provider uses `<HERMES_HOME>/wiki` at the **root**, shared across profiles)
 
 ## 4. Set up maintenance
 
-Schedule the health pipeline from `skills/wiki-maintenance.SKILL.md` — sync →
+Schedule the health pipeline from the `wiki-maintenance` skill — sync →
 embed → extract → doctor. Typical cron:
 
 ```bash
@@ -107,12 +111,11 @@ token budget.
 plugin.yaml                          # plugin manifest
 __init__.py                          # WikiMemoryProvider (MemoryProvider ABC)
 wiki_client.py                       # GBrainClient (serve/JSON-RPC) + file ops
-skills/
-  gbrain-integration.SKILL.md        # gbrain install + PGLite + MCP wiring
-  llm-wiki.SKILL.md                  # Karpathy-pattern wiki methodology
-  wiki-maintenance.SKILL.md          # cron health pipeline
 SETUP.md                             # this file
 ```
+
+The companion skills (`gbrain-integration`, `llm-wiki`, `wiki-maintenance`)
+ship with Hermes Agent — install from your skill catalog.
 
 ## License
 
