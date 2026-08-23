@@ -24,7 +24,15 @@ logger = logging.getLogger(__name__)
 # Shared wiki brain lives at the Hermes ROOT, not the profile home — so every
 # profile/bot in the fleet queries and writes the SAME wiki. get_hermes_home()
 # returns profiles/<name> under a profile, which has no wiki/; the root does.
-WIKI_PATH = Path(str(get_default_hermes_root() / "wiki"))
+# WIKI_PATH env (e.g. in $HERMES_HOME/.env) overrides the default.
+def _resolve_wiki_path() -> Path:
+    env = os.environ.get("WIKI_PATH", "").strip()
+    if env:
+        return Path(env)
+    return Path(str(get_default_hermes_root() / "wiki"))
+
+
+WIKI_PATH = _resolve_wiki_path()
 
 # gbrain reads these with env precedence; the Hermes .env lists them as ${VAR}
 # placeholders (Bitwarden-resolved only at Hermes runtime). A child inheriting

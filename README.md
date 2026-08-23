@@ -24,7 +24,7 @@ The stock Hermes memory providers (Honcho, Hindsight, Mem0, etc.) are single clo
 
 - Hermes Agent (any platform)
 - [gbrain](https://github.com/garrytan/gbrain) CLI — `bun install -g github:garrytan/gbrain`
-- A git wiki repo at `$HERMES_HOME/wiki` (the Hermes **root**, not a profile dir)
+- A git wiki repo at `<HERMES_ROOT>/wiki` by default (the Hermes **root**, not a profile dir) — override with `WIKI_PATH` env
 - gbrain embeddings backend (e.g. `ZEROENTROPY_API_KEY`, or a local model)
 
 ## Install
@@ -50,6 +50,7 @@ The provider is a standard Hermes memory plugin. Key knobs:
 | `memory.provider` | — | must be `wiki` |
 | `memory.wiki.wiki_context_cap` | `1200` | max chars of wiki recall injected per turn |
 | `HERMES_WIKI_CONTEXT_MAX_CHARS` | (unset) | env override for the same cap |
+| `WIKI_PATH` | `<HERMES_ROOT>/wiki` | env override for the wiki location (read at load) |
 
 Per-model context caps live in `wiki_client.py` (`MODEL_CONTEXT_CAP_CHARS`) — tight windows for `:free` tiers, default 3000 chars otherwise.
 

@@ -1,7 +1,7 @@
 name: wiki
 title: "Wiki Memory Provider"
 description: "gbrain-powered semantic recall + session insight persistence for the agent wiki — local-first, wiki-native, shared across profiles"
-version: "0.3.0"
+version: "0.3.1"
 author: "chrisluersen"
 license: "MIT"
 category: "memory"

@@ -33,12 +33,15 @@ same brain).
 ## 1. Install the plugin
 
 ```bash
-hermes plugins install github:chrisluersen/hermes-wiki-memory --enable
+hermes plugins install chrisluersen/hermes-wiki-memory --enable
 hermes config set memory.provider wiki
 hermes config set memory.wiki.wiki_context_cap 1200   # optional recall budget
 hermes gateway restart
 hermes memory status     # Provider: wiki / Plugin: installed / Status: available
 ```
+
+> Use the `owner/repo` shorthand, not a `github:` prefix — the prefix mangles
+> the URL (`github.com/github:chrisluersen/...`) and breaks install.
 
 ## 2. Install gbrain + build the brain
 
@@ -67,8 +70,9 @@ wiki/
   work/  personal/  sessions/  plans/
 ```
 
-Set `WIKI_PATH` in `$HERMES_HOME/.env` so tooling finds it (default `~/wiki`;
-this provider uses `<HERMES_HOME>/wiki` at the **root**, shared across profiles).
+The wiki path defaults to `<HERMES_ROOT>/wiki` (shared across every profile/bot).
+To point it elsewhere, set `WIKI_PATH` in `$HERMES_HOME/.env` — the plugin reads
+it at load time.
 
 ## 4. Set up maintenance
 
