@@ -76,6 +76,11 @@ SETUP.md           # full-stack install guide (plugin + wiki + gbrain + maintena
 Companion skills (`gbrain-integration`, `llm-wiki`, `wiki-maintenance`) ship
 with Hermes Agent.
 
+## Design and roadmap
+
+- [Reliability roadmap](docs/RELIABILITY-ROADMAP.md)
+- [Design principles extracted from Seneschal](docs/SENESCHAL-DESIGN-NOTES.md)
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
