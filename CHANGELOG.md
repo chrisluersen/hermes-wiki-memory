@@ -3,6 +3,19 @@
 All notable changes to **hermes-wiki-memory** are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] - 2026-08-23
+
+### Added
+- Dashboard status + activity tab (`provides_dashboard: true`). A read-only
+  pane showing brain health (wiki location, git branch/head, gbrain
+  availability, last commit), page counts by knowledge category and entities
+  subdir, and recent commits to the knowledge base. Served by the plugin's own
+  `dashboard/plugin_api.py` (mounted at `/api/plugins/wiki/`) and a plain-IIFE
+  frontend bundle — no build step.
+- gbrain availability is probed WITHOUT running `gbrain doctor` (doctor takes a
+  schema advisory lock during embed/sync and can hang a dashboard request up to
+  600s). The dashboard checks the binary is on PATH and `config.json` resolves.
+
 ## [0.3.1] - 2026-08-23
 
 ### Added
@@ -36,6 +49,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-[Unreleased]: https://github.com/chrisluersen/hermes-wiki-memory/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/chrisluersen/hermes-wiki-memory/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/chrisluersen/hermes-wiki-memory/releases/tag/v0.3.2
 [0.3.1]: https://github.com/chrisluersen/hermes-wiki-memory/releases/tag/v0.3.1
 [0.3.0]: https://github.com/chrisluersen/hermes-wiki-memory/releases/tag/v0.3.0

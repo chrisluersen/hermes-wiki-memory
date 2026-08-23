@@ -17,6 +17,9 @@ The stock Hermes memory providers (Honcho, Hindsight, Mem0, etc.) are single clo
 - **Session insights persisted** — decisions, learnings, and open questions are extracted and written back to the wiki as dated pages.
 - **Memory writes mirrored** — every `memory` tool write is appended to a dated wiki entry page.
 - **Delegation captured** — subagent outcomes logged to the wiki.
+- **Dashboard status tab** — a read-only Hermes dashboard pane (`/wiki`) showing
+  brain health, page counts by category, and recent commits. No `gbrain doctor`
+  call — it probes availability without the advisory-lock hang.
 - **Shared across profiles/bots** — the wiki lives at the Hermes *root*, so every profile and Bot Mode bot queries and writes the **same** knowledge base (no per-bot memory fragmentation).
 - **Backup-friendly** — `hermes backup` includes the wiki + `~/.gbrain`.
 
@@ -66,6 +69,7 @@ Per-model context caps live in `wiki_client.py` (`MODEL_CONTEXT_CAP_CHARS`) — 
 plugin.yaml        # plugin manifest (name, requires, provides, config)
 __init__.py        # WikiMemoryProvider — the MemoryProvider implementation
 wiki_client.py     # GBrainClient (serve/JSON-RPC) + WikiFileClient (file ops)
+dashboard/         # optional read-only dashboard tab (manifest + API + IIFE bundle)
 SETUP.md           # full-stack install guide (plugin + wiki + gbrain + maintenance)
 ```
 

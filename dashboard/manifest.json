@@ -1,0 +1,14 @@
+{
+  "name": "wiki",
+  "label": "Wiki",
+  "description": "Brain health + activity for the wiki memory provider — page counts by category, recent commits to the knowledge base, gbrain availability. Read-only status pane.",
+  "icon": "FileText",
+  "version": "0.3.2",
+  "tab": {
+    "path": "/wiki",
+    "position": "end"
+  },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}

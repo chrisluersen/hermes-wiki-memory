@@ -1,0 +1,203 @@
+/* Hermes Wiki Memory — dashboard plugin styles.
+ * Theme-safe: uses var(--color-*) with NO fallback. Alpha via color-mix.
+ * Hardcoded hex only for the semantic status dot (never text/background). */
+
+.wiki-page {
+  padding: 4px 2px;
+}
+
+.wiki-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  max-width: 960px;
+}
+
+.wiki-grid > * {
+  margin: 0;
+}
+
+.wiki-sec-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  letter-spacing: 0.01em;
+}
+
+.wiki-icon {
+  color: var(--color-muted-foreground);
+  flex-shrink: 0;
+}
+
+.wiki-sec-subtitle {
+  margin: 14px 0 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted-foreground);
+}
+
+.wiki-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wiki-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.82rem;
+}
+
+.wiki-row-label {
+  color: var(--color-muted-foreground);
+}
+
+.wiki-row-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--color-foreground);
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wiki-row-extra {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+}
+
+/* Semantic status dot — the ONLY hardcoded-hex exception (never text/bg). */
+.wiki-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+}
+.wiki-dot-bad {
+  background: #ef4444;
+}
+
+.wiki-last-commit {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wiki-last-subj {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-foreground);
+}
+.wiki-last-meta {
+  font-size: 0.7rem;
+  color: var(--color-muted-foreground);
+}
+
+.wiki-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.wiki-countbar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 3px;
+}
+.wiki-countbar-label {
+  font-size: 0.76rem;
+  color: var(--color-muted-foreground);
+}
+.wiki-countbar-val {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.wiki-countbar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-foreground) 10%, transparent);
+  overflow: hidden;
+}
+.wiki-countbar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--color-primary);
+  transition: width 0.3s ease;
+}
+
+.wiki-commits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wiki-commit {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.8rem;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+.wiki-commit:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.wiki-commit-hash {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.72rem;
+  color: var(--color-muted-foreground);
+}
+.wiki-commit-subj {
+  font-weight: 500;
+  color: var(--color-foreground);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wiki-commit-date {
+  font-size: 0.7rem;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+.wiki-empty {
+  font-size: 0.82rem;
+  color: var(--color-muted-foreground);
+  margin: 0;
+}
+
+.wiki-error {
+  font-size: 0.85rem;
+  color: var(--color-destructive);
+  margin: 8px 0;
+}

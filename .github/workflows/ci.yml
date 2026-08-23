@@ -22,8 +22,20 @@ jobs:
 
       - name: Compile all Python
         run: |
-          python -m py_compile __init__.py wiki_client.py
+          python -m py_compile __init__.py wiki_client.py dashboard/plugin_api.py
           echo "py_compile OK"
+
+      - name: Validate dashboard manifest + API
+        run: |
+          python -c "
+          import json, importlib.util, sys
+          m = json.load(open('dashboard/manifest.json'))
+          assert m.get('name') == 'wiki', 'dashboard manifest name'
+          assert m.get('tab', {}).get('path'), 'dashboard manifest tab.path'
+          assert m.get('entry'), 'dashboard manifest entry'
+          assert m.get('api'), 'dashboard manifest api'
+          print('dashboard manifest OK:', m['name'], m['version'])
+          "
 
       - name: Validate plugin.yaml
         run: |
