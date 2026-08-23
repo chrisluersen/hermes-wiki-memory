@@ -4,6 +4,10 @@ A pluggable **memory provider for [Hermes Agent](https://hermes-agent.nousresear
 
 Think of it as Hindsight's auto-generated "knowledge pages" — except the knowledge base is a **human-curated, git-versioned markdown wiki** you own, with provenance and cross-links, rather than opaque auto-generated memories.
 
+> This is the **complete** local-first replacement for the stock cloud memory
+> providers (Honcho, Hindsight, Mem0). Besides the plugin it ships the gbrain,
+> llm-wiki, and wiki-maintenance skills plus a [full setup guide](SETUP.md).
+
 ## Why
 
 The stock Hermes memory providers (Honcho, Hindsight, Mem0, etc.) are single cloud-backed providers. This one is **local-first and wiki-native**:
@@ -60,6 +64,8 @@ Per-model context caps live in `wiki_client.py` (`MODEL_CONTEXT_CAP_CHARS`) — 
 plugin.yaml        # plugin manifest (name, requires, provides, config)
 __init__.py        # WikiMemoryProvider — the MemoryProvider implementation
 wiki_client.py     # GBrainClient (serve/JSON-RPC) + WikiFileClient (file ops)
+SETUP.md           # full-stack install guide (plugin + wiki + gbrain + maintenance)
+skills/            # gbrain-integration, llm-wiki, wiki-maintenance skills
 ```
 
 ## License
