@@ -1,22 +1,4 @@
-```text
-           __..--''``---....___   _..._    __
- /// //_.-'    .-/";  `        ``<._  ``.''_ `. / // /
-///_.-' _..--.'_    \                    `( ) ) // //
-/ (_..-' // (< _     ;_..__               ; `' / ///
- / // // //  `-._,_)' // / ``--...____..-' /// / //
-```
-
 # Hermes Wiki Memory Provider
-
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.2-8b5cf6)](#)
-[![Python](https://img.shields.io/badge/python-3.11+-brightgreen)](#)
-[![gbrain](https://img.shields.io/badge/backend-gbrain_0.46-3b82f6)](#)
-[![topic](https://img.shields.io/badge/topic-memory_provider-4ade80)](#)
-
-
-<!-- og:image for GitHub social preview -->
-<img src="docs/assets/og-hermes-wiki-memory.png" alt="hermes-wiki-memory social preview" width="100%">
 
 A pluggable **memory provider for [Hermes Agent](https://hermes-agent.nousresearch.com)** that gives the agent semantic recall + session persistence backed by a **git wiki + [gbrain](https://github.com/garrytan/gbrain)** knowledge graph.
 
