@@ -1,0 +1,20 @@
+name: wiki
+title: "Wiki Memory Provider"
+description: "gbrain-powered semantic recall + session insight persistence for the agent wiki — local-first, wiki-native, shared across profiles"
+version: "0.2.0"
+author: "chrisluersen"
+license: "MIT"
+category: "memory"
+requires:
+  - gbrain CLI (bun install -g github:garrytan/gbrain)
+  - Wiki (brain repo) at <HERMES_ROOT>/wiki
+  - gbrain embeddings backend (e.g. ZEROENTROPY_API_KEY or a local model)
+provides:
+  - wiki memory provider (per-turn semantic recall via gbrain CLI)
+  - on_session_end insight extraction
+  - on_memory_write mirror to wiki
+  - on_delegation capture
+  - prefetch per-turn recall
+config:
+  memory:
+    provider: "wiki"
