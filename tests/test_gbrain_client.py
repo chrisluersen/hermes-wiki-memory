@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import subprocess
 import sys
 import types
 from pathlib import Path
@@ -24,30 +23,15 @@ def _load_client_module(monkeypatch):
     return module
 
 
-def test_close_reaps_process_after_forced_kill(monkeypatch, tmp_path):
+def test_close_does_not_shutdown_shared_registry_owner(monkeypatch, tmp_path):
     module = _load_client_module(monkeypatch)
-    client = module.GBrainClient(tmp_path)
     calls = []
-
-    class FakeStdin:
-        def close(self):
-            calls.append("stdin.close")
-
-    class FakeProcess:
-        stdin = FakeStdin()
-
-        def wait(self, timeout):
-            calls.append(("wait", timeout))
-            if calls.count(("wait", 5)) == 1:
-                raise subprocess.TimeoutExpired("gbrain", timeout)
-            return 0
-
-        def kill(self):
-            calls.append("kill")
-
-    client._proc = FakeProcess()
+    registry = types.SimpleNamespace(
+        get_entry=lambda name: types.SimpleNamespace(handler=lambda args: calls.append(args))
+    )
+    client = module.GBrainClient(tmp_path, registry=registry)
 
     client.close()
 
-    assert calls == ["stdin.close", ("wait", 5), "kill", ("wait", 5)]
-    assert client._proc is None
+    assert calls == []
+    assert not hasattr(client, "_proc")

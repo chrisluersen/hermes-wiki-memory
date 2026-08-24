@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import threading
+import pathlib
 from pathlib import Path
 
 import pytest
@@ -198,3 +199,182 @@ def test_lock_artifacts_live_outside_wiki(wiki_module, tmp_path):
     assert not (wiki / ".wiki-memory-locks").exists()
     assert client._lock_root != wiki
     assert client._lock_root.exists()
+
+
+def test_lock_file_initialization_retries_transient_windows_denial(
+    wiki_module, monkeypatch, tmp_path
+):
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    client = wiki_module.WikiFileClient(wiki)
+    real_open = wiki_module.Path.open
+    attempts = 0
+
+    def flaky_open(path, mode="r", *args, **kwargs):
+        nonlocal attempts
+        if path.suffix == ".lock" and mode == "xb" and attempts < 2:
+            attempts += 1
+            raise PermissionError("transient lock-file initialization denial")
+        return real_open(path, mode, *args, **kwargs)
+
+    class FakeMsvcrt:
+        LK_NBLCK = 1
+        LK_UNLCK = 2
+
+        @staticmethod
+        def locking(fd, mode, count):
+            return None
+
+    monkeypatch.setattr(wiki_module.Path, "open", flaky_open)
+    monkeypatch.setitem(__import__("sys").modules, "msvcrt", FakeMsvcrt)
+    monkeypatch.setattr(wiki_module, "_is_windows", lambda: True)
+
+    client.append_to_page("Knowledge/log.md", "entry")
+
+    assert attempts == 2
+    assert (wiki / "Knowledge" / "log.md").read_text(encoding="utf-8").count("entry") == 1
+
+
+def test_windows_simulation_does_not_mutate_process_global_os_name(
+    wiki_module, monkeypatch, tmp_path
+):
+    original_os_name = os.name
+    original_path_type = type(pathlib.Path())
+    monkeypatch.setattr(wiki_module, "_is_windows", lambda: True)
+
+    assert wiki_module._is_windows() is True
+    assert os.name == original_os_name
+    assert type(pathlib.Path(tmp_path)) is original_path_type
+
+
+def test_lock_file_initialization_repairs_existing_empty_lock(
+    wiki_module, monkeypatch, tmp_path
+):
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    client = wiki_module.WikiFileClient(wiki)
+    target = client._resolve_page_path("Knowledge/log.md")
+    client._lock_root.mkdir(parents=True, exist_ok=True)
+    digest = __import__("hashlib").sha256(
+        client._lock_identity(target).encode("utf-8")
+    ).hexdigest()
+    lock_path = client._lock_root / f"{digest}.lock"
+    lock_path.touch()
+    observed_sizes = []
+
+    class FakeMsvcrt:
+        LK_NBLCK = 1
+        LK_UNLCK = 2
+
+        @staticmethod
+        def locking(fd, mode, count):
+            if mode == FakeMsvcrt.LK_NBLCK:
+                observed_sizes.append(lock_path.stat().st_size)
+
+    monkeypatch.setitem(__import__("sys").modules, "msvcrt", FakeMsvcrt)
+    monkeypatch.setattr(wiki_module, "_is_windows", lambda: True)
+
+    client.append_to_page("Knowledge/log.md", "entry")
+
+    assert observed_sizes == [1]
+    assert lock_path.read_bytes() == b" "
+
+
+def test_lock_timeout_is_not_masked_by_unlock_error(wiki_module, monkeypatch, tmp_path):
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    client = wiki_module.WikiFileClient(wiki)
+
+    class FakeMsvcrt:
+        LK_NBLCK = 1
+        LK_UNLCK = 2
+
+        @staticmethod
+        def locking(fd, mode, count):
+            if mode == FakeMsvcrt.LK_NBLCK:
+                raise PermissionError("busy")
+            raise RuntimeError("must not unlock when acquisition failed")
+
+    ticks = iter((0.0, 31.0))
+    monkeypatch.setitem(__import__("sys").modules, "msvcrt", FakeMsvcrt)
+    monkeypatch.setattr(wiki_module, "_is_windows", lambda: True)
+    monkeypatch.setattr(wiki_module.time, "monotonic", lambda: next(ticks))
+
+    with pytest.raises(TimeoutError, match="timed out waiting"):
+        client.append_to_page("Knowledge/log.md", "entry")
+
+
+def test_parent_swap_before_locked_write_is_rejected(wiki_module, monkeypatch, tmp_path):
+    wiki = tmp_path / "wiki"
+    outside = tmp_path / "outside"
+    parent = wiki / "Knowledge"
+    parent.mkdir(parents=True)
+    outside.mkdir()
+    client = wiki_module.WikiFileClient(wiki)
+    monkeypatch.setattr(
+        client,
+        "_canonical_disk_path",
+        lambda target: outside / "log.md",
+    )
+
+    with pytest.raises(ValueError, match="inside the Wiki root"):
+        client.append_to_page("Knowledge/log.md", "must not escape")
+
+    assert not (outside / "log.md").exists()
+
+
+def test_append_fails_closed_on_malformed_frontmatter(wiki_module, tmp_path):
+    wiki = tmp_path / "wiki"
+    target = wiki / "Knowledge" / "broken.md"
+    target.parent.mkdir(parents=True)
+    original = "---\ntitle: [broken\n---\n\ncanonical body\n"
+    target.write_text(original, encoding="utf-8")
+    client = wiki_module.WikiFileClient(wiki)
+
+    with pytest.raises(ValueError, match="malformed frontmatter"):
+        client.append_to_page("Knowledge/broken.md", "new content")
+
+    assert target.read_text(encoding="utf-8") == original
+
+
+def test_upsert_rejects_stale_prior_fingerprint(wiki_module, tmp_path):
+    import hashlib
+
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    client = wiki_module.WikiFileClient(wiki)
+    client.upsert_page("Knowledge/page.md", "Page", "original")
+    target = wiki / "Knowledge" / "page.md"
+    expected = hashlib.sha256(target.read_bytes()).hexdigest()
+    target.write_text(target.read_text(encoding="utf-8") + "external change", encoding="utf-8")
+    changed = target.read_bytes()
+
+    with pytest.raises(RuntimeError, match="fingerprint conflict"):
+        client.upsert_page(
+            "Knowledge/page.md",
+            "Page",
+            "replacement",
+            expected_sha256=expected,
+        )
+
+    assert target.read_bytes() == changed
+
+
+def test_upsert_accepts_matching_prior_fingerprint(wiki_module, tmp_path):
+    import hashlib
+
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    client = wiki_module.WikiFileClient(wiki)
+    client.upsert_page("Knowledge/page.md", "Page", "original")
+    target = wiki / "Knowledge" / "page.md"
+    expected = hashlib.sha256(target.read_bytes()).hexdigest()
+
+    client.upsert_page(
+        "Knowledge/page.md",
+        "Page",
+        "replacement",
+        expected_sha256=expected,
+    )
+
+    assert "replacement" in target.read_text(encoding="utf-8")

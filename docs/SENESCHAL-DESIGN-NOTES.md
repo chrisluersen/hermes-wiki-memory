@@ -7,10 +7,10 @@ experimental `chrisluersen/seneschal` project before that repository is archived
 It is a design input, not a dependency, governance layer, or authorization
 system.
 
-> **Implementation status:** Everything under “Retained principles” is a
-> normative target for the hardened product unless explicitly labeled as
-> current behavior. Release `0.3.2` does not yet satisfy these guarantees; see
-> the reliability roadmap and README limitations.
+> **Implementation status:** Candidate `0.4.0` implements the bounded core of
+> these principles locally. Live semantic activation, representative private-
+> Wiki restore/rebuild evidence and Windows reparse coverage remain gated; see
+> the reliability roadmap.
 
 - Seneschal source reviewed at commit:
   `da083149399a6e840b5c74f0c33f499a720b0def`
@@ -28,7 +28,7 @@ remaining P0/P1 acceptance tests still gate production readiness.
 It is not an agent-estate manager, policy engine, workflow system, task store,
 secrets manager, or replacement for native Hermes and Git state.
 
-The hardened product will have three responsibilities:
+The product has three bounded responsibilities:
 
 1. recall relevant Wiki knowledge for Hermes;
 2. safely capture candidate knowledge into the Wiki;
@@ -45,39 +45,38 @@ state.
 
 ### 2. Adopt the existing Wiki
 
-The hardened plugin will map semantic roles onto an existing layout rather than
+The candidate maps semantic roles onto an existing layout rather than
 force a new folder tree or create a parallel taxonomy. The simple new-Wiki
 target is `Inbox/`, `Projects/`, `Knowledge/`, `Sources/Originals/`,
 `Sources/Notes/`, `Archive/`, and `_meta/`; the roadmap's `adopt-existing`
-mapping will let an existing `Clippings/`/`Notes/`/`Topics/`/`Ideas/` layout
-remain physically unchanged. Release `0.3.2` does not implement this mapping.
+mapping lets an existing `Clippings/`/`Notes/`/`Topics/`/`Ideas/` layout remain
+physically unchanged without creating or moving folders.
 
 ### 3. Capture before promotion
 
-Automatically inferred session insights and delegation summaries will land in the
+Automatically inferred session insights and delegation summaries land in the
 configured capture area with source-session provenance and `status: captured`.
 They will not silently rewrite canonical topic or project pages. Explicit memory
-tool writes will remain explicit user/agent actions and may follow their configured
-canonical path.
+tool add/replace/remove events also land as immutable captures; promotion into a
+topic, project, or other established page remains a separate explicit action.
 
 ### 4. One GBrain owner per PGLite brain
 
-All approved Hermes profiles and bots will use one shared GBrain owner for a
-PGLite brain. The hardened plugin will never compete for ownership, kill another
-owner, or delete a live owner's lock. If it cannot attach, recall will degrade to
+Approved Hermes profiles and bots use the Hermes-managed shared GBrain MCP owner.
+The plugin never competes for ownership, kills another
+owner, or deletes a live owner's lock. If it cannot attach, recall degrades to
 lexical search while Wiki capture remains available.
 
 ### 5. Writes are contained, concurrent-safe, and crash-safe
 
-Every plugin-generated path will remain below the configured Wiki root. Page
-updates will use a cross-process lock, recheck the prior fingerprint after
-acquiring the lock, write a sibling temporary file, flush it, and atomically
-replace the target. A conflicting writer will produce an explicit conflict
-instead of silent last-writer-wins data loss.
+Every plugin-generated path remains below the configured Wiki root. Immutable
+capture creation and append updates use cross-process locking, sibling temporary
+files, flush/fsync, and atomic replacement. Capture collisions fail closed, and
+mutable replacement can require a matching prior fingerprint under the lock.
 
 ### 6. Failure is scoped and graceful
 
-The hardened provider will expose only three operational states:
+The provider exposes three operational states:
 
 - `available` — Wiki and configured recall paths work;
 - `degraded` — canonical Wiki operations work but semantic recall or maintenance
@@ -99,18 +98,17 @@ contents, authorization material, and unnecessary absolute paths.
 
 ### 8. Backup and rebuild are both explicit
 
-The hardened provider will discover its actual configured Wiki and GBrain paths
-without requiring provider initialization. Backups will include canonical state
-outside `HERMES_HOME`. Derived GBrain state will either be backed up consistently
-or marked for rebuild. A temporary restore drill will verify representative Wiki
-reads, Git integrity, and lexical/semantic retrieval.
+The provider discovers its configured Wiki without initialization. Canonical
+Markdown is the required backup; derived GBrain state is marked for rebuild in a
+secret-free manifest. A temporary synthetic restore verifies bytes, Git integrity,
+and lexical retrieval. A private-Wiki restore plus semantic rebuild remains gated.
 
-### 9. Uninstall preserves user data
+### 9. Plugin-code removal preserves user data
 
-Uninstall will remove only plugin-owned integration files and jobs. It will
-preserve the Wiki, Hermes sessions, built-in memory, and GBrain data unless the
-user separately requests data removal. Repeated uninstall will be safe and will
-report leftovers.
+Plugin-code removal deletes only the plugin install directory and refuses to run
+when a declared retained path is nested inside it. It preserves external Wiki,
+Hermes-session, built-in-memory, and GBrain paths. This does not describe full
+Hermes uninstall, which remains separately destructive and backup-gated.
 
 ### 10. Evaluate recall usefulness, not only infrastructure score
 

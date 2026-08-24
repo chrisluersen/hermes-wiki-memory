@@ -13,6 +13,34 @@ HERMES_ROOT = Path("C:/test-hermes-root")
 
 
 @pytest.fixture
+def wiki_module(monkeypatch):
+    """Load ``wiki_client.py`` with the smallest Hermes constants contract."""
+    constants = sys.modules["hermes_constants"]
+    constants.get_default_hermes_root = lambda: HERMES_ROOT
+    constants.get_hermes_home = lambda: HERMES_ROOT
+    name = "wiki_client_under_test"
+    sys.modules.pop(name, None)
+    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "wiki_client.py")
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def recovery_module(monkeypatch):
+    name = "wiki_recovery_under_test"
+    sys.modules.pop(name, None)
+    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "recovery.py")
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
 def plugin_module(monkeypatch):
     """Load the plugin package with the smallest supported Hermes contract."""
     for name in list(sys.modules):

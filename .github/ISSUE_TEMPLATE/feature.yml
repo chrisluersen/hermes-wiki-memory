@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose a bounded improvement that preserves product ownership
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem cannot be solved by the current provider?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: owner
+    attributes:
+      label: Primary owner
+      options:
+        - Hermes lifecycle/provider integration
+        - Canonical Markdown Wiki
+        - Derived GBrain retrieval
+        - Capture and safe writes
+        - Dashboard/health
+        - CI/recovery/documentation
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and migration impact
+      description: Explain canonical/derived ownership, backup, rollback, existing-Wiki compatibility, and live approval needs.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance tests
+      description: List synthetic, deterministic tests that would prove completion.
+    validations:
+      required: true

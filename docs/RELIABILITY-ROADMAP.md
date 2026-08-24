@@ -29,9 +29,10 @@ Acceptance:
 - Memory-manager lifecycle tests cover initialize, prefetch, session switch,
   session end, memory-write hook, delegation hook, and shutdown.
 
-Status: provider subclassing and provider-level initialization/shutdown unit
-tests are implemented; memory-manager orchestration and the remaining lifecycle
-hooks still need behavioral coverage.
+Status: provider subclassing, setup, initialization, prefetch, pre-compression,
+session switching/end, memory/delegation hooks, degraded prompt text, and
+shutdown have behavioral coverage. A disposable installed-package restart test
+remains release-gated.
 
 ### P0.2 Resolve one Wiki configuration everywhere
 
@@ -58,9 +59,11 @@ Acceptance:
   `entities/`, `concepts/`, `comparisons/`, `queries/`, `work/`, `personal/`,
   `sessions/`, or `plans/` directories.
 
-Status: matching root precedence is implemented across provider initialization,
-dashboard status, backup discovery, and setup persistence. One immutable shared
-configuration object, semantic-role mapping, and `adopt-existing` remain open.
+Status: matching root precedence, semantic roles, multiple knowledge paths,
+exact-case validation, dashboard counts, setup persistence, and
+`adopt-existing` are implemented without migration. The provider and isolated
+dashboard still use equivalent read-only resolvers rather than one importable
+cross-loader configuration object.
 
 ### P0.3 Use one GBrain owner
 
@@ -74,6 +77,11 @@ Acceptance:
 - Two provider processes against one PGLite brain do not start competing owners.
 - Both can recall, or the non-owner reports `degraded` and uses lexical fallback.
 - Owner restart reconnects without data loss.
+
+Status: the provider owns no GBrain process and dispatches the shared Hermes MCP
+`recall` tool only after exact source/timeout/toolset attestation. Missing or
+failed attachment degrades to lexical recall. A live configured-owner restart
+test remains approval-gated.
 
 ### P0.4 Make Wiki writes safe
 
@@ -89,9 +97,13 @@ Acceptance:
 - Absolute, traversal, reserved-name, and out-of-root paths fail safely.
 - No temporary or lock file leaks remain after success or failure.
 
-Status: containment, reserved-name/ADS rejection, atomic replace and concurrent
-append tests are implemented. Prior-fingerprint conflict detection and explicit
-Windows reparse-point coverage remain open.
+Status: containment, reserved-name/ADS rejection, immutable capture creation,
+atomic replace, concurrent append, prior-fingerprint replacement conflicts,
+case aliases, transient Windows lock-file initialization/repair, and
+cross-process stress are implemented. Explicit Windows reparse-point coverage
+remains open. The supported model is cooperative writers with under-lock
+resolved-containment revalidation; adversarial post-check junction swaps require
+native handle-relative I/O and remain explicitly out of scope.
 
 ## P1 — Durable behavior
 
@@ -107,6 +119,11 @@ Acceptance:
 - Captures can be traced to their source session.
 - Duplicate end-of-session delivery is idempotent.
 
+Status: implemented for session insights, delegation results, and explicit
+memory add/replace/remove events. Captures use forced Hermes redaction, stable
+event IDs, immutable pages, source provenance, replay byte-idempotency, and
+collision refusal. Capture requires an existing configured capture directory.
+
 ### P1.2 Add real lexical fallback
 
 - Implement bounded Markdown lexical search independent of GBrain.
@@ -118,6 +135,10 @@ Acceptance:
 - Expected pages are found with GBrain stopped.
 - Recall stays within configured context size.
 - Recalled context is fenced so it is not recursively captured as new memory.
+
+Status: implemented with file/byte/time/result/context ceilings and synthetic
+evaluation coverage. The provider's capture heuristics scan original session
+messages, not injected prefetch blocks.
 
 ### P1.3 Apply explicit Wiki retrieval policy
 
@@ -134,6 +155,10 @@ Acceptance:
 - Existing `Clippings/` and new `Sources/Originals/` receive equivalent policy.
 - Archive retrieval is available explicitly without polluting ordinary recall.
 
+Status: ordinary recall excludes runtime/generated/cache/session paths, prefers
+knowledge/projects, and demotes originals/archive. An explicit archive-only
+query mode is still optional future work.
+
 ### P1.4 Add truthful health
 
 - Report `available`, `degraded`, or `unavailable` plus component facts.
@@ -146,10 +171,15 @@ Acceptance:
   missing Wiki, and dashboard failure.
 - No health result claims semantic recall when only lexical recall works.
 
+Status: implemented for Wiki readability/writability, lexical recall, attested
+semantic registration, and capture readiness. Embedding coverage is reported as
+unknown unless proven; a live stale-embedding probe remains approval-gated.
+
 ### P1.5 Fix backup and uninstall
 
 - Make `backup_paths()` initialization-free.
-- Discover configured GBrain state rather than assuming `~/.gbrain`.
+- Treat GBrain state as derived and record rebuild inputs rather than copying a
+  live PGLite directory as required canonical backup.
 - Add a disposable representative restore check.
 - Document and test data-preserving uninstall.
 
@@ -160,6 +190,12 @@ Acceptance:
   query when embeddings are configured.
 - Uninstall twice leaves Wiki and session bytes unchanged.
 
+Status: initialization-free canonical Wiki discovery, secret-free rebuild
+manifest, temporary tree/Git/lexical restore verification, and idempotent
+plugin-code removal are implemented. Hermes sessions remain outside plugin
+ownership. A representative private-Wiki restore plus keyed semantic rebuild is
+approval-gated.
+
 ## P2 — Quality and release
 
 ### P2.1 Establish a recall evaluation set
@@ -167,16 +203,25 @@ Acceptance:
 Track expected page, rank, latency, retrieval path, and context size for a small
 set of stable questions. Keep the fixture synthetic for public CI.
 
+Status: a deterministic synthetic lexical fixture records route, expected page,
+latency, injected size, and exclusion violations. A keyed semantic canary is
+deferred until embedding settings and cost are approved.
+
 ### P2.2 Make extraction claims honest
 
 Either rename heuristic extraction accordingly or add a bounded structured
 extractor. Do not describe regex extraction as LLM extraction.
+
+Status: capture metadata and documentation identify current extraction as
+heuristic rather than LLM-based.
 
 ### P2.3 Expand CI to behavioral tests
 
 CI must run the provider lifecycle, path/config, concurrency, outage fallback,
 backup/restore, uninstall, and dashboard API tests—not only compilation and
 manifest parsing.
+
+Status: implemented on Ubuntu and Windows using the standalone test runner.
 
 ### P2.4 Publish a hardening release
 
@@ -186,6 +231,10 @@ After P0 and P1 pass:
 - document known limitations;
 - publish a changelog entry;
 - tag the next compatible release.
+
+Status: candidate version `0.4.0` and release-facing documentation are prepared
+locally. PR publication, live recovery evidence, tag, and GitHub Release require
+separate approval.
 
 ## Non-goals
 
