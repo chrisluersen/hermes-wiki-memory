@@ -31,8 +31,9 @@ def test_readme_describes_current_ownership_and_safety_boundaries():
         "layout: adopt-existing",
         "forced Hermes secret redaction",
         "GBrain storage is derived",
-        "not production-enabled",
-        "disposable lexical-only activation passed",
+        "validated production posture remains lexical-only",
+        "released commit passed disposable lexical-only activation",
+        "tagged and published",
     ]
     assert all(text.lower() in normalized_readme.lower() for text in required)
 
@@ -54,12 +55,44 @@ def test_release_docs_separate_release_from_production_activation():
 
     assert "## [0.4.0] - 2026-08-24" in changelog
     assert "disposable lexical-only activation passed" in changelog
-    assert "A full private-Wiki semantic rebuild is not a release prerequisite" in changelog
-    assert "PR publication and disposable installed-package validation are complete" in normalized(roadmap)
+    normalized_changelog = normalized(changelog)
+    assert "A full private-Wiki semantic rebuild is not a release prerequisite" in normalized_changelog
+    assert "production remains lexical-only" in normalized_changelog
+    normalized_roadmap = normalized(roadmap)
+    assert "PR/CI, disposable installation, canonical recovery, and lexical-only activation evidence are complete" in normalized_roadmap
+    assert "merged, tagged, and published" in roadmap
     assert "121 behavioral test functions" not in roadmap
     assert "20–30 meaningful behavioral tests" not in roadmap
-    assert "Release publication does not authorize canonical-profile activation" in setup
+    normalized_setup = normalized(setup)
+    assert "publication remains separate from any installation's canonical or semantic activation" in normalized_setup
     assert "disposable installation/restart testing" not in setup
+
+
+def test_operational_status_records_completed_recovery_and_semantic_stop_decision():
+    readme = normalized((ROOT / "README.md").read_text(encoding="utf-8"))
+    setup = normalized((ROOT / "SETUP.md").read_text(encoding="utf-8"))
+    roadmap = normalized((ROOT / "docs" / "RELIABILITY-ROADMAP.md").read_text(encoding="utf-8"))
+    design = normalized((ROOT / "docs" / "SENESCHAL-DESIGN-NOTES.md").read_text(encoding="utf-8"))
+    corpus = "\n".join([readme, setup, roadmap, design])
+
+    required = [
+        "canonical-profile lexical-only activation",
+        "representative canonical-Wiki",
+        "isolated keyed semantic canary",
+        "missed its predeclared production threshold",
+        "production posture remains lexical-only",
+    ]
+    assert all(text.lower() in corpus.lower() for text in required)
+
+    stale = [
+        "not yet tagged",
+        "restore remains required",
+        "restore evidence remains gated",
+        "canary remains required",
+        "semantic canary remains gated",
+        "tag creation, and GitHub Release publication remain",
+    ]
+    assert not any(text.lower() in corpus.lower() for text in stale)
 
 
 def test_setup_requires_attested_shared_mcp_and_separate_live_approval():
@@ -69,6 +102,19 @@ def test_setup_requires_attested_shared_mcp_and_separate_live_approval():
     assert "no more than seven seconds" in setup
     assert "separate approval" in setup
     assert "Never test recovery against the active PGLite store" in setup
+
+
+def test_setup_pins_plugin_install_to_full_release_commit():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    setup = (ROOT / "SETUP.md").read_text(encoding="utf-8")
+    import re
+
+    refs = re.findall(r"hermes plugins install[^\n]+--ref\s+(\S+)", setup)
+    assert refs == ["72eea8af5e3168b5ef793164b14506807107ba4c"]
+    assert re.fullmatch(r"[0-9a-f]{40}", refs[0])
+    assert "--ref v0.4.0" not in setup
+    assert "published tag's peeled 40-character commit" in readme
+    assert "install the exact tag" not in readme
 
 
 def test_relative_markdown_links_resolve():

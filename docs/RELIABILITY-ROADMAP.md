@@ -193,10 +193,10 @@ Acceptance:
 Status: initialization-free canonical Wiki discovery, secret-free rebuild
 manifest, temporary tree/Git/lexical restore verification, and idempotent
 plugin-code removal are implemented. Hermes sessions remain outside plugin
-ownership. A representative private-Wiki restore is approval-gated before
-canonical activation; a separate isolated semantic canary is approval-gated
-before semantic activation. Neither blocks an explicitly experimental lexical-
-capable release.
+ownership. A representative canonical-Wiki backup/restore, canonical lexical-
+only activation, and a separate isolated keyed semantic canary have passed.
+Semantic production remains disabled because a later bounded derived-Notes
+evaluation improved retrieval but missed its predeclared acceptance threshold.
 
 ## P2 — Quality and release
 
@@ -206,8 +206,10 @@ Track expected page, rank, latency, retrieval path, and context size for a small
 set of stable questions. Keep the fixture synthetic for public CI.
 
 Status: a deterministic synthetic lexical fixture records route, expected page,
-latency, injected size, and exclusion violations. A keyed semantic canary is
-deferred until embedding settings and cost are approved.
+latency, injected size, and exclusion violations. An isolated keyed semantic
+canary passed. A bounded private derived-Notes evaluation then improved rank and
+cross-note retrieval but missed its predeclared top-three threshold, so no live
+semantic MCP or provider activation followed.
 
 ### P2.2 Make extraction claims honest
 
@@ -234,11 +236,10 @@ After P0 and P1 pass:
 - publish a changelog entry;
 - tag the next compatible release.
 
-Status: version `0.4.0` is merged to `master`; PR publication and disposable
-installed-package validation are complete. Release-documentation publication,
-tag creation, and GitHub Release publication remain separate approval-gated
-effects. Live recovery and semantic evidence remain activation gates rather
-than experimental-release gates.
+Status: version `0.4.0` is merged, tagged, and published as a GitHub prerelease;
+PR/CI, disposable installation, canonical recovery, and lexical-only activation
+evidence are complete. Optional semantic evidence remains separate from release
+and did not meet the project's production acceptance threshold.
 
 ## Non-goals
 

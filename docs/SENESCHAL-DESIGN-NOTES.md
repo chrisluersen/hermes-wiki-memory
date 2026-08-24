@@ -7,11 +7,11 @@ experimental `chrisluersen/seneschal` project before that repository is archived
 It is a design input, not a dependency, governance layer, or authorization
 system.
 
-> **Implementation status:** Version `0.4.0` is merged to `master`, and its
-> disposable lexical-only activation passed. Representative private-Wiki
-> restore evidence remains gated before canonical activation; an isolated
-> semantic canary remains gated before semantic activation. See the reliability
-> roadmap.
+> **Implementation status:** Version `0.4.0` is merged, tagged, and published as
+> a prerelease. Disposable and canonical lexical-only activation, representative
+> restore evidence, and an isolated semantic canary passed. A later bounded
+> semantic evaluation missed its predeclared production threshold, so live
+> semantic activation intentionally did not follow. See the reliability roadmap.
 
 - Seneschal source reviewed at commit:
   `da083149399a6e840b5c74f0c33f499a720b0def`
@@ -101,9 +101,9 @@ contents, authorization material, and unnecessary absolute paths.
 
 The provider discovers its configured Wiki without initialization. Canonical
 Markdown is the required backup; derived GBrain state is marked for rebuild in a
-secret-free manifest. A temporary synthetic restore verifies bytes, Git integrity,
-and lexical retrieval. A private-Wiki restore and an isolated semantic canary
-remain separate activation gates, not experimental-release prerequisites.
+secret-free manifest. Temporary synthetic and representative canonical restores
+verify bytes and lexical retrieval. Semantic canary and retrieval-quality
+evidence remain separate activation gates, not release prerequisites.
 
 ### 9. Plugin-code removal preserves user data
 

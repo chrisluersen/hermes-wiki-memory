@@ -1,8 +1,8 @@
 # Setup — Hermes Wiki Memory 0.4.0
 
-This guide covers reviewed `0.4.0` code and approval-gated activation. Release
-publication does not authorize canonical-profile activation, live GBrain
-configuration, or Wiki migration.
+This guide covers the published experimental `0.4.0` prerelease and
+approval-gated activation. Release publication does not authorize a live Wiki
+migration, credential use, or semantic MCP activation.
 
 ## Architecture
 
@@ -19,7 +19,8 @@ The provider never starts or stops GBrain and never falls back to one-shot GBrai
 ## 0. Prerequisites
 
 - Current Hermes Agent.
-- A disposable test Wiki with an existing capture directory.
+- A disposable test Wiki with an existing capture directory for initial
+  validation, followed by an existing canonical Wiki for approved activation.
 - For semantic recall only: a configured shared GBrain MCP server exposing the `verbs` surface and `recall`.
 - Approved embedding credentials/model belong to GBrain, not this repository.
 
@@ -33,13 +34,14 @@ python tests/run.py
 hermes plugins doctor --ci C:/path/to/hermes-wiki-memory
 ```
 
-Create and select a disposable profile, then install an exact reviewed
-40-character commit **disabled**:
+Create and select a disposable profile, then install the published tag's peeled
+40-character commit **disabled**. Hermes intentionally requires a full SHA for
+`--ref`; a tag name is not accepted:
 
 ```bash
 hermes profile create wiki-test --no-skills
 hermes profile use wiki-test
-hermes plugins install chrisluersen/hermes-wiki-memory --ref <REVIEWED_40_CHAR_SHA> --no-enable
+hermes plugins install chrisluersen/hermes-wiki-memory --ref 72eea8af5e3168b5ef793164b14506807107ba4c --no-enable
 ```
 
 Confirm `hermes profile show wiki-test` identifies the disposable profile. Then
@@ -59,6 +61,18 @@ requires it. When testing is complete, restore the prior sticky profile with
 canonical Wiki during this procedure.
 
 A `degraded` lexical-only state is expected until semantic source/timeout attestation is configured.
+
+### Canonical lexical-only activation
+
+After disposable validation, take a fresh recoverable backup of the canonical
+Wiki and restore it to an isolated directory. Verify representative bytes,
+governance files, and bounded lexical recall before touching the live profile.
+Then install the same exact plugin revision disabled in the intended profile,
+save an `adopt-existing` mapping using exact on-disk path case, keep
+`gbrain_source` empty, enable `wiki` without tool override, select
+`memory.provider: wiki`, and verify detailed health reports lexical recall and
+capture readiness while semantic recall remains false. Keep the restored copy
+and pre-activation config snapshot until activation is proven.
 
 ## 2. Adopt an existing Wiki without moving content
 
@@ -226,7 +240,7 @@ hermes plugins doctor --ci .
 
 CI runs the behavioral suite on Ubuntu and Windows. A symlink test may skip on Windows processes lacking symlink privileges.
 
-## 10. Production gates
+## 10. Verified evidence and remaining gates
 
 Completed release evidence:
 
@@ -234,20 +248,27 @@ Completed release evidence:
 - real Hermes loading and plugin-doctor checks passed;
 - disposable lexical-only activation passed twice in separate real-Hermes
   processes against a synthetic Wiki; and
-- the disposable profile, plugin, and fixture were removed afterward.
+- the disposable profile, plugin, and fixture were removed afterward;
+- an external canonical-Wiki backup and representative isolated restore passed;
+- canonical-profile lexical-only activation passed with rollback evidence; and
+- an isolated keyed GBrain semantic canary passed without changing the live
+  semantic source.
 
-Production use still requires separate approval for:
+Each installation must still separately approve and verify:
 
-- representative private-Wiki restore;
+- its own backup/restore scope;
+- its exact existing-folder role mapping; and
 - canonical-profile enablement.
 
 Semantic use additionally requires separate approval for:
 
-- a fresh isolated GBrain canary with approved embedding settings; and
-- exact live GBrain MCP source/timeout configuration.
+- a fresh isolated GBrain canary with approved embedding settings;
+- a bounded local retrieval acceptance set that must pass before production;
+- exact live GBrain MCP source/timeout configuration; and
+- a tested lexical fallback when the shared semantic owner is unavailable.
 
-Tag creation and GitHub Release publication are separate external effects.
-Release publication does not authorize canonical-profile activation.
+The `v0.4.0` tag and GitHub prerelease are published. That publication remains
+separate from any installation's canonical or semantic activation.
 
 Do not bundle live Wiki migration, GBrain schema changes, active-store reinitialization, or full Hermes uninstall with plugin activation.
 
