@@ -4,6 +4,26 @@ A pluggable **memory provider for [Hermes Agent](https://hermes-agent.nousresear
 
 Think of it as Hindsight's auto-generated "knowledge pages" — except the knowledge base is a **human-curated, git-versioned markdown wiki** you own, with provenance and cross-links, rather than opaque auto-generated memories.
 
+## What this is — and is not
+
+Hermes Wiki Memory is a **Hermes `MemoryProvider` adapter** for a canonical
+Markdown Wiki. It connects three systems with different responsibilities:
+
+1. **Hermes owns the agent lifecycle** — sessions, turns, memory hooks,
+   delegation hooks, configuration, backup discovery, and provider activation.
+2. **Markdown + Git own durable knowledge** — the Wiki is the human-readable
+   system of record. It remains usable without this plugin or GBrain.
+3. **GBrain currently provides semantic retrieval** — the plugin starts and
+   queries GBrain, then injects bounded recall into Hermes.
+
+So this is **not a rewrite or fork of Hermes's memory system**. It implements
+Hermes's existing provider interface. It is also **more than a thin GBrain
+wrapper** because it owns safe Wiki writes, Hermes lifecycle capture,
+configuration, backup declarations, and dashboard status. However, the current
+retrieval path is GBrain-specific and too tightly coupled: one shared GBrain
+owner and a GBrain-independent lexical fallback remain required before the
+architecture is complete.
+
 > **Status: experimental; hardening in progress.** Release `0.3.2` is not yet a
 > safe drop-in replacement for the stock memory providers. Semantic role mapping,
 > GBrain ownership, fallback, capture safety, and restore
@@ -17,11 +37,13 @@ The stock Hermes memory providers (Honcho, Hindsight, Mem0, etc.) are single clo
 
 - **Per-turn semantic recall** — gbrain hybrid search injects the most relevant wiki context into each prompt.
 - **Prototype session capture** — current hooks attempt heuristic extraction and
-  dated-page writes; capture-before-promotion, idempotency, and safe-path tests
-  remain roadmap work.
+  dated-page writes. Paths and writes are now contained, locked, atomic, and
+  concurrency-tested; capture-before-promotion, idempotency, and redaction remain
+  roadmap work.
 - **Prototype memory/delegation mirroring** — current hooks append dated entries
-  to hardcoded legacy paths. Configurable roles and atomic concurrent writes are
-  not implemented in release `0.3.2`.
+  to hardcoded legacy paths. Configurable roles are not implemented; safe atomic
+  concurrent writes are present on current `master` but were not part of tagged
+  release `0.3.2`.
 - **Dashboard status tab** — a read-only Hermes dashboard pane (`/wiki`) showing
   brain health, page counts by category, and recent commits. No `gbrain doctor`
   call — it probes availability without the advisory-lock hang.
@@ -79,6 +101,23 @@ Per-model context caps live in `wiki_client.py` (`MODEL_CONTEXT_CAP_CHARS`) — 
   `WIKI_PATH`, then the shared Hermes root.
 - gbrain tools (`search`, `think`) are exposed to the agent via the native gbrain MCP server, not this plugin.
 
+### Current data flow
+
+```text
+Hermes turn/session hook
+        │
+        ├── recall ──> WikiMemoryProvider ──> GBrain search ──> bounded context
+        │
+        └── capture ─> WikiFileClient ──────> Markdown files
+```
+
+GBrain is a **derived index**, not the memory system of record. If its database
+is lost, the intended recovery path is to rebuild it from the Markdown Wiki.
+Full sessions remain canonically owned by Hermes rather than being duplicated
+as canonical Wiki pages. Git can version the Wiki, but this plugin does not
+stage or commit changes; Git history depends on a separate user or automation
+workflow.
+
 ## Files
 
 ```
@@ -102,7 +141,8 @@ through its own documented onboarding; this project does not assume nonexistent
 ## Wiki layout
 
 The target configuration uses semantic roles, not one mandatory directory tree.
-After roadmap item P0.2 lands, the planned new-Wiki default is:
+Root-path configuration from P0.2 is implemented; semantic-role mapping is not.
+After that remaining mapping work lands, the planned new-Wiki default is:
 
 ```text
 Inbox/
@@ -122,6 +162,33 @@ processed source notes. `Topics/` and `Ideas/` may map to one durable
 `Knowledge` role. This is a target contract, not yet a claim that the current
 plugin implements every mapping option. Path matching must use the exact
 on-disk spelling and case. See the [full mapping decision](docs/WIKI-FOLDER-MAPPING.md).
+
+## Next steps
+
+Do **not** enable the provider against a canonical Wiki yet. The recommended
+implementation order is:
+
+1. **P0.3 — one GBrain owner:** stop starting one private `gbrain serve` per
+   Hermes process and attach profiles to one supervised owner. Explicit source
+   binding and normalized MCP error handling are additional integration
+   hardening needed during that work.
+2. **P1.2/P1.3 — lexical fallback and retrieval policy:** recall useful Markdown
+   when GBrain is unavailable while excluding generated/runtime content and
+   demoting originals/archive material.
+3. **P1.1 — safe capture semantics:** send inferred insights to Inbox, preserve
+   provenance, and make replay idempotent. Stable event IDs are one practical
+   implementation mechanism; secret redaction is additional capture hardening.
+4. **Finish P0.2 — role mapping:** implement `adopt-existing` and configurable
+   capture/project/knowledge/source/archive paths without moving live content.
+5. **P1.4/P1.5 — truthful health and recovery:** report
+   available/degraded/unavailable states and prove representative backup,
+   restore, rebuild, and data-preserving uninstall.
+6. **P2 — evaluate and release:** add a synthetic recall benchmark, complete
+   lifecycle integration tests, then publish the next tagged hardening release.
+
+For a practical next milestone, complete steps 1–2 before installing this on a
+real Wiki. Folder migration should come later, after stable identity, retrieval
+comparison, backup, and rollback are proven.
 
 ## License
 
