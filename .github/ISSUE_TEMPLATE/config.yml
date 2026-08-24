@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security report
+    url: https://github.com/chrisluersen/hermes-wiki-memory/security/advisories/new
+    about: Report vulnerabilities privately. Do not include sensitive details in a public issue.

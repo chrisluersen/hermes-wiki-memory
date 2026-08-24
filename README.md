@@ -1,194 +1,201 @@
 # Hermes Wiki Memory Provider
 
-A pluggable **memory provider for [Hermes Agent](https://hermes-agent.nousresearch.com)** that gives the agent semantic recall + session persistence backed by a **git wiki + [gbrain](https://github.com/garrytan/gbrain)** knowledge graph.
-
-Think of it as Hindsight's auto-generated "knowledge pages" — except the knowledge base is a **human-curated, git-versioned markdown wiki** you own, with provenance and cross-links, rather than opaque auto-generated memories.
+A local-first [`MemoryProvider`](https://hermes-agent.nousresearch.com) for a canonical Markdown Wiki, with bounded lexical recall and optional semantic retrieval through a shared [GBrain](https://github.com/garrytan/gbrain) MCP owner.
 
 ## What this is — and is not
 
-Hermes Wiki Memory is a **Hermes `MemoryProvider` adapter** for a canonical
-Markdown Wiki. It connects three systems with different responsibilities:
+Hermes Wiki Memory connects three systems with distinct responsibilities:
 
-1. **Hermes owns the agent lifecycle** — sessions, turns, memory hooks,
-   delegation hooks, configuration, backup discovery, and provider activation.
-2. **Markdown + Git own durable knowledge** — the Wiki is the human-readable
-   system of record. It remains usable without this plugin or GBrain.
-3. **GBrain currently provides semantic retrieval** — the plugin starts and
-   queries GBrain, then injects bounded recall into Hermes.
+1. **Hermes owns agent memory lifecycle** — sessions, turns, provider hooks, configuration, backup discovery, and activation.
+2. **Markdown owns durable knowledge** — the Wiki is the human-readable canonical store. Git may version it, but this plugin does not stage or commit changes.
+3. **GBrain is optional derived retrieval** — Hermes owns the shared MCP connection; this provider never starts, kills, or falls back to a private GBrain process.
 
-So this is **not a rewrite or fork of Hermes's memory system**. It implements
-Hermes's existing provider interface. It is also **more than a thin GBrain
-wrapper** because it owns safe Wiki writes, Hermes lifecycle capture,
-configuration, backup declarations, and dashboard status. However, the current
-retrieval path is GBrain-specific and too tightly coupled: one shared GBrain
-owner and a GBrain-independent lexical fallback remain required before the
-architecture is complete.
+This is **not a rewrite or fork of Hermes memory**. It implements Hermes's existing provider contract. It is also **more than a thin GBrain wrapper**: it owns Wiki configuration, bounded lexical fallback, retrieval policy, contained atomic writes, immutable capture events, backup declarations, recovery evidence, and dashboard health.
 
-> **Status: experimental; hardening in progress.** Release `0.3.2` is not yet a
-> safe drop-in replacement for the stock memory providers. Semantic role mapping,
-> GBrain ownership, fallback, capture safety, and restore
-> behavior remain roadmap work. Do not enable it against canonical data until the
-> P0/P1 acceptance tests in the [reliability roadmap](docs/RELIABILITY-ROADMAP.md)
-> pass.
+> **Status: experimental candidate `0.4.0`; not released or production-enabled.**
+> The local candidate passes behavioral, concurrency, restore, and synthetic recall tests. Live semantic activation and a representative private-Wiki restore/rebuild drill still require explicit approval. Do not enable it against canonical data solely because the source tree is green.
 
-## Why
+## Current behavior
 
-The stock Hermes memory providers (Honcho, Hindsight, Mem0, etc.) are single cloud-backed providers. This one is **local-first and wiki-native**:
+- **Lexical recall works without GBrain.** Markdown search is bounded by file count, per-file bytes, aggregate bytes, elapsed time, result count, and context size.
+- **Explicit retrieval policy.** Runtime/generated/session/cache paths are excluded; durable knowledge and active projects rank above originals and archives.
+- **One shared semantic owner.** Optional semantic recall dispatches GBrain's `recall` verb through Hermes's public tool registry. The provider owns no subprocess.
+- **Fail-closed semantic admission.** Semantic recall is enabled only when:
+  - `memory.wiki.gbrain_source` exactly matches the configured MCP server's `GBRAIN_SOURCE`;
+  - the MCP timeout is positive and no more than seven seconds; and
+  - the expected `mcp__<server>__recall` tool is registered under the matching toolset.
+  Otherwise recall degrades to lexical Markdown search.
+- **Semantic role mapping.** `layout: adopt-existing` maps existing folders without creating, moving, or renaming them. Multiple knowledge folders are supported.
+- **Safe capture.** Session insights, delegation results, and explicit memory events go only to the configured capture role. Captures are immutable candidates, not automatic promotion into established knowledge.
+- **Stable and redacted events.** Event IDs are derived after forced Hermes secret redaction; replay preserves exact bytes; collisions fail closed.
+- **Contained atomic writes.** Page writes reject traversal, absolute paths, ADS/device names, unsafe extensions, and resolved escapes; per-page thread/process locking prevents lost cooperative updates.
+- **Truthful health.** The provider/dashboard report `available`, `degraded`, or `unavailable` with Wiki, lexical, semantic, and capture facts.
+- **Canonical backup contract.** `backup_paths()` returns the Markdown Wiki only. GBrain storage is derived and described by a secret-free rebuild manifest rather than copied live as a required backup.
 
-- **Per-turn semantic recall** — gbrain hybrid search injects the most relevant wiki context into each prompt.
-- **Prototype session capture** — current hooks attempt heuristic extraction and
-  dated-page writes. Paths and writes are now contained, locked, atomic, and
-  concurrency-tested; capture-before-promotion, idempotency, and redaction remain
-  roadmap work.
-- **Prototype memory/delegation mirroring** — current hooks append dated entries
-  to hardcoded legacy paths. Configurable roles are not implemented; safe atomic
-  concurrent writes are present on current `master` but were not part of tagged
-  release `0.3.2`.
-- **Dashboard status tab** — a read-only Hermes dashboard pane (`/wiki`) showing
-  brain health, page counts by category, and recent commits. No `gbrain doctor`
-  call — it probes availability without the advisory-lock hang.
-- **Designed for shared use across profiles/bots** — the target architecture uses
-  one configured Wiki and one shared GBrain owner. Release `0.3.2` does not yet
-  satisfy the shared-owner acceptance tests.
-- **Backup integration in progress** — current unreleased hardening discovers the
-  configured Wiki and `GBRAIN_HOME/.gbrain` paths before initialization. A
-  representative restore is still required before complete backup coverage is
-  claimed, and Hermes skips external provider paths outside the user home.
-
-## Requirements
-
-- Hermes Agent (any platform)
-- [gbrain](https://github.com/garrytan/gbrain) CLI — `bun install -g github:garrytan/gbrain`
-- A disposable development Wiki. Release `0.3.2` defaults to
-  `<HERMES_ROOT>/wiki`; current unreleased hardening supports `memory.wiki.root`
-  while semantic role mapping in roadmap item P0.2 remains open.
-- gbrain embeddings backend (e.g. `ZEROENTROPY_API_KEY`, or a local model)
-
-## Install
-
-```bash
-hermes plugins install chrisluersen/hermes-wiki-memory --enable
-hermes config set memory.provider wiki
-hermes config set memory.wiki.wiki_context_cap 1200   # optional: per-turn recall budget
-```
-
-Restart the gateway (`hermes gateway restart`) for hooks to load, then verify:
-
-```bash
-hermes memory status    # Provider: wiki / Plugin: installed / Status: available
-```
-
-## Configure
-
-The prototype is packaged as a Hermes memory plugin. Current and planned knobs:
-
-| Setting | Default | Purpose |
-|---|---|---|
-| `memory.provider` | — | must be `wiki` |
-| `memory.wiki.root` | `<HERMES_ROOT>/wiki` | canonical Wiki root |
-| `memory.wiki.wiki_context_cap` | `1200` | max chars of wiki recall injected per turn |
-| `HERMES_WIKI_CONTEXT_MAX_CHARS` | (unset) | env override for the same cap |
-| `WIKI_PATH` | `<HERMES_ROOT>/wiki` | compatibility override; `memory.wiki.root` takes precedence |
-
-Per-model context caps live in `wiki_client.py` (`MODEL_CONTEXT_CAP_CHARS`) — tight windows for `:free` tiers, default 3000 chars otherwise.
-
-## How it works
-
-- `WikiClient` wraps a **persistent `gbrain serve` child** over JSON-RPC/stdio — pays the ~6.5s DB init once per process, then answers warm (`search` ~5.6s, `think` ~0.2s). Falls back to one-shot CLI calls if the server dies.
-- `WikiMemoryProvider` subclasses the current Hermes `MemoryProvider` ABC.
-- `WikiFileClient` confines paths to the Wiki root and uses locked atomic writes.
-- The provider and dashboard use matching precedence: `memory.wiki.root`, then
-  `WIKI_PATH`, then the shared Hermes root.
-- gbrain tools (`search`, `think`) are exposed to the agent via the native gbrain MCP server, not this plugin.
-
-### Current data flow
+## Data flow
 
 ```text
 Hermes turn/session hook
         │
-        ├── recall ──> WikiMemoryProvider ──> GBrain search ──> bounded context
+        ├── recall ──> shared GBrain MCP recall (when attested and healthy)
+        │                    │
+        │                    └── failure/unavailable ──> bounded Markdown lexical recall
         │
-        └── capture ─> WikiFileClient ──────> Markdown files
+        └── capture ─> forced redaction ─> stable event ID ─> immutable Inbox page
+
+Canonical: Markdown Wiki (+ optional Git history)
+Derived:   GBrain index, caches, dashboard projections
+Canonical sessions: Hermes state.db/session store
 ```
 
-GBrain is a **derived index**, not the memory system of record. If its database
-is lost, the intended recovery path is to rebuild it from the Markdown Wiki.
-Full sessions remain canonically owned by Hermes rather than being duplicated
-as canonical Wiki pages. Git can version the Wiki, but this plugin does not
-stage or commit changes; Git history depends on a separate user or automation
-workflow.
+## Requirements
 
-## Files
+- Current Hermes Agent with the `MemoryProvider` and public tool-registry interfaces.
+- An existing Markdown Wiki. The provider does not scaffold or migrate one during startup.
+- Optional: one Hermes-managed GBrain MCP server exposing the `verbs` surface and `recall` tool.
+- Optional semantic embeddings backend configured in GBrain, not in this plugin.
 
+## Configuration
+
+```yaml
+memory:
+  provider: wiki
+  wiki:
+    root: C:/path/to/wiki
+    wiki_context_cap: 1200
+    layout: adopt-existing
+    paths:
+      capture: Inbox
+      projects: Projects
+      knowledge: [Topics, Ideas]
+      sources:
+        originals: Clippings
+        processed: Notes
+      archive: Archive
+    gbrain_server: gbrain-local
+    gbrain_source: hermes-wiki
+
+mcp_servers:
+  gbrain-local:
+    # Exact command/args belong to the installed GBrain version.
+    timeout: 6
+    env:
+      GBRAIN_SOURCE: hermes-wiki
 ```
-plugin.yaml        # plugin manifest (name, requires, provides, config)
-__init__.py        # WikiMemoryProvider prototype lifecycle hooks
-wiki_client.py     # GBrainClient (serve/JSON-RPC) + WikiFileClient (file ops)
-dashboard/         # optional read-only dashboard tab (manifest + API + IIFE bundle)
-SETUP.md           # full-stack install guide (plugin + wiki + gbrain + maintenance)
+
+Root precedence is:
+
+```text
+memory.wiki.root → WIKI_PATH → <HERMES_ROOT>/wiki
 ```
 
-Hermes Agent currently ships the `llm-wiki` skill. Install and configure GBrain
-through its own documented onboarding; this project does not assume nonexistent
-`gbrain-integration` or `wiki-maintenance` Hermes catalog entries.
+The setup UI exposes comma-separated knowledge paths because Hermes's current setup schema fields are scalar. Configuration is persisted as a list.
 
-## Design and roadmap
+### Semantic activation safety
 
-- [Reliability roadmap](docs/RELIABILITY-ROADMAP.md)
-- [Design principles extracted from Seneschal](docs/SENESCHAL-DESIGN-NOTES.md)
-- [Wiki folder mapping](docs/WIKI-FOLDER-MAPPING.md)
+The provider does **not** trust ambient source resolution, a sole source, a brain default, or an unbounded MCP timeout. If exact source/timeout attestation is absent, health is `degraded` and lexical recall remains available.
 
-## Wiki layout
+Existing installations that lack either exact setting remain safely lexical-only until their MCP configuration is separately reviewed and changed.
 
-The target configuration uses semantic roles, not one mandatory directory tree.
-Root-path configuration from P0.2 is implemented; semantic-role mapping is not.
-After that remaining mapping work lands, the planned new-Wiki default is:
+## Adopt existing, do not migrate
+
+For an existing Wiki, map roles using exact on-disk spelling and case. A compatible example is:
+
+```yaml
+layout: adopt-existing
+paths:
+  capture: Inbox
+  projects: Projects
+  knowledge: [Topics, Ideas]
+  sources:
+    originals: Clippings
+    processed: Notes
+```
+
+No folder is created by role resolution. Automatic capture also refuses to create a missing capture directory. Create/scaffold operations and live migrations are separate, explicit actions.
+
+For a new Wiki created by a separately approved scaffold, the recommended workbench is:
 
 ```text
 Inbox/
 Projects/
 Knowledge/
-Sources/
-  Originals/
-  Notes/
+Sources/Originals/
+Sources/Notes/
 Archive/
 _meta/
 ```
 
-The roadmap target for an existing Wiki is `layout: adopt-existing`: map
-equivalent roles without moving content. For example, the existing
-`Clippings/` folder can remain the originals role and `Notes/` can remain
-processed source notes. `Topics/` and `Ideas/` may map to one durable
-`Knowledge` role. This is a target contract, not yet a claim that the current
-plugin implements every mapping option. Path matching must use the exact
-on-disk spelling and case. See the [full mapping decision](docs/WIKI-FOLDER-MAPPING.md).
+## Health states
 
-## Next steps
+| State | Meaning |
+|---|---|
+| `available` | Wiki readable/writable, lexical recall available, capture role ready, and attested semantic recall registered |
+| `degraded` | Wiki/lexical recall works, but semantic recall or capture readiness is unavailable |
+| `unavailable` | Wiki is missing/unreadable and no safe recall path exists |
 
-Do **not** enable the provider against a canonical Wiki yet. The recommended
-implementation order is:
+Embedding coverage remains `unknown` unless the shared GBrain owner proves it. The dashboard never runs lock-taking `gbrain doctor` calls.
 
-1. **P0.3 — one GBrain owner:** stop starting one private `gbrain serve` per
-   Hermes process and attach profiles to one supervised owner. Explicit source
-   binding and normalized MCP error handling are additional integration
-   hardening needed during that work.
-2. **P1.2/P1.3 — lexical fallback and retrieval policy:** recall useful Markdown
-   when GBrain is unavailable while excluding generated/runtime content and
-   demoting originals/archive material.
-3. **P1.1 — safe capture semantics:** send inferred insights to Inbox, preserve
-   provenance, and make replay idempotent. Stable event IDs are one practical
-   implementation mechanism; secret redaction is additional capture hardening.
-4. **Finish P0.2 — role mapping:** implement `adopt-existing` and configurable
-   capture/project/knowledge/source/archive paths without moving live content.
-5. **P1.4/P1.5 — truthful health and recovery:** report
-   available/degraded/unavailable states and prove representative backup,
-   restore, rebuild, and data-preserving uninstall.
-6. **P2 — evaluate and release:** add a synthetic recall benchmark, complete
-   lifecycle integration tests, then publish the next tagged hardening release.
+## Backup, restore, and uninstall
 
-For a practical next milestone, complete steps 1–2 before installing this on a
-real Wiki. Folder migration should come later, after stable identity, retrieval
-comparison, backup, and rollback are proven.
+- **Required backup:** canonical Markdown Wiki, including Git metadata when the Wiki is archived as a directory.
+- **Derived rebuild:** GBrain state is rebuilt from Markdown; live PGLite bytes are not claimed as a consistent required backup.
+- **Rebuild manifest:** records Wiki tree digest, Git head, source ID, and verification requirements without credentials.
+- **Temporary restore verification:** tests compare bytes/tree digest, run `git fsck --strict`, and prove lexical recall/exclusion behavior.
+- **Data-preserving removal:** plugin-code removal is idempotent and retains Wiki/data paths. Hermes full uninstall remains a separate destructive action requiring verified backup.
+
+A real private-Wiki restore plus isolated GBrain rebuild and semantic query is still required before production/release claims.
+
+## Verification in the current local candidate
+
+The repository includes:
+
+- provider/config/lifecycle tests;
+- Windows/POSIX path and locking tests;
+- repeated cross-process cooperative-writer tests;
+- shared-MCP and error-envelope tests;
+- lexical fallback and retrieval-policy tests;
+- capture redaction/idempotency/collision tests;
+- adopt-existing mapping tests;
+- dashboard health/count tests;
+- temporary restore/Git/uninstall tests; and
+- a deterministic synthetic lexical recall benchmark.
+
+CI runs on Ubuntu and Windows. Some Windows symlink tests skip when the process lacks symlink privileges; containment code is still exercised through non-privileged path tests.
+
+The write model protects cooperative writers and revalidates resolved containment
+after acquiring the page lock. It does not claim to defeat a malicious external
+process that races a Windows junction/reparse-point swap after revalidation;
+native handle-relative I/O would be required for that stronger adversarial model.
+
+## Files
+
+```text
+plugin.yaml             provider manifest
+__init__.py             Hermes MemoryProvider lifecycle and hooks
+wiki_client.py          shared MCP adapter, lexical recall, roles, capture, safe file operations
+recovery.py             rebuild manifest and temporary restore/removal verification
+dashboard/              read-only health/count/activity UI
+SETUP.md                development and activation procedure
+docs/                   mapping, design boundaries, and reliability roadmap
+tests/                  behavioral, concurrency, recovery, and evaluation tests
+.github/                CI, dependency updates, PR and issue templates
+SECURITY.md             private-reporting and security-boundary guidance
+CONTRIBUTING.md         product invariants and development workflow
+```
+
+## Remaining gates
+
+Before production enablement or a formal release:
+
+1. Approve and apply exact live GBrain MCP source binding plus a ≤7-second timeout.
+2. Run a disposable installation against a synthetic Wiki and restart Hermes surfaces.
+3. Run a representative private-Wiki backup/restore in an isolated location.
+4. Rebuild a fresh isolated GBrain index with approved credentials/model/dimensions and verify semantic recall.
+5. Add explicit Windows reparse-point coverage where the CI runner permits it.
+6. Publish through reviewed PR/CI, then separately approve tag and GitHub Release creation.
+
+Live Wiki migration, embedding-schema changes, active-store reinitialization/deletion, and full Hermes uninstall are not authorized by this repository candidate.
 
 ## License
 

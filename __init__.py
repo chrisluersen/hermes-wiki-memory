@@ -6,7 +6,6 @@ Implements the MemoryProvider ABC for Hermes Agent.
 from __future__ import annotations
 
 import logging
-import os
 import re
 import time
 from pathlib import Path
@@ -19,8 +18,10 @@ from .wiki_client import (
     resolve_wiki_path,
     wiki_context_cap,
 )
+from .recovery import build_rebuild_manifest
 
 logger = logging.getLogger(__name__)
+PLUGIN_VERSION = "0.4.0"
 
 
 def _load_provider_config(explicit: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -34,22 +35,18 @@ def _load_provider_config(explicit: Optional[Dict[str, Any]] = None) -> Dict[str
         wiki = memory.get("wiki", {}) if isinstance(memory, dict) else {}
         if isinstance(wiki, dict):
             configured.update(wiki)
+        if explicit:
+            configured.update(explicit)
+        server_name = str(configured.get("gbrain_server", "gbrain")).strip() or "gbrain"
+        servers = config.get("mcp_servers", {}) if isinstance(config, dict) else {}
+        server = servers.get(server_name, {}) if isinstance(servers, dict) else {}
+        if isinstance(server, dict) and server:
+            env = server.get("env", {}) if isinstance(server.get("env", {}), dict) else {}
+            configured["_gbrain_attested_source"] = str(env.get("GBRAIN_SOURCE", "")).strip()
+            configured["_gbrain_timeout"] = server.get("timeout")
     except Exception as exc:
         logger.debug("Wiki provider config unavailable: %s", exc)
-    if explicit:
-        configured.update(explicit)
     return configured
-
-
-def _resolve_gbrain_dir() -> Optional[Path]:
-    """Mirror GBrain's absolute-parent/no-``..`` ``GBRAIN_HOME`` contract."""
-    parent = os.environ.get("GBRAIN_HOME", "").strip()
-    if not parent:
-        return (Path.home() / ".gbrain").resolve()
-    raw = Path(parent).expanduser()
-    if not raw.is_absolute() or ".." in raw.parts:
-        return None
-    return (raw / ".gbrain").resolve()
 
 
 class WikiMemoryProvider(MemoryProvider):
@@ -92,7 +89,16 @@ class WikiMemoryProvider(MemoryProvider):
         self._provider_config = _load_provider_config(
             kwargs.get("provider_config", {}) or {}
         )
-        self._client = WikiClient(resolve_wiki_path(self._provider_config))
+        self._client = WikiClient(
+            resolve_wiki_path(self._provider_config),
+            gbrain_server=str(self._provider_config.get("gbrain_server", "gbrain")),
+            gbrain_source=str(self._provider_config.get("gbrain_source", "")),
+            gbrain_attested_source=str(
+                self._provider_config.get("_gbrain_attested_source", "")
+            ),
+            gbrain_timeout=self._provider_config.get("_gbrain_timeout"),
+            config=self._provider_config,
+        )
 
         if not self._client.is_available():
             logger.warning("Wiki provider initialized but wiki/gbrain not fully available")
@@ -101,14 +107,20 @@ class WikiMemoryProvider(MemoryProvider):
         logger.info("Wiki memory provider initialized for session %s", session_id)
 
     def system_prompt_block(self) -> str:
-        """Static provider info for system prompt."""
+        """Describe only recall/capture behavior that is actually available."""
         if not self._client or not self._client.is_available():
             return ""
+        health = self._client.health()
+        recall = (
+            "- Semantic Wiki recall via the configured shared GBrain MCP owner\n"
+            if health.get("semantic_recall")
+            else "- Lexical Wiki recall is available; semantic GBrain recall is degraded\n"
+        )
         return (
             "## Wiki Memory\n"
-            "- Semantic recall via gbrain (query/think tools available)\n"
-            "- Session insights auto-persisted to wiki on session end\n"
-            "- Built-in memory tool writes mirrored to wiki\n"
+            + recall
+            + "- Inferred insights, delegations, and memory events are captured to the configured capture folder\n"
+            + "- Captures are candidates, not automatically promoted canonical knowledge\n"
         )
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
@@ -162,6 +174,15 @@ class WikiMemoryProvider(MemoryProvider):
                 "maximum": 20000,
                 "step": 100,
             },
+            {"key": "gbrain_server", "description": "Hermes MCP server name for the shared GBrain owner", "default": "gbrain"},
+            {"key": "gbrain_source", "description": "Explicit GBrain source bound by that MCP server", "default": ""},
+            {"key": "layout", "description": "Wiki layout mapping mode", "default": "adopt-existing"},
+            {"key": "capture_path", "description": "Capture role path", "default": "Inbox"},
+            {"key": "projects_path", "description": "Projects role path", "default": "Projects"},
+            {"key": "knowledge_path", "description": "Knowledge role path(s), comma-separated", "default": "Knowledge"},
+            {"key": "archive_path", "description": "Archive role path", "default": "Archive"},
+            {"key": "originals_path", "description": "Original sources role path", "default": "Sources/Originals"},
+            {"key": "processed_path", "description": "Processed sources role path", "default": "Sources/Notes"},
         ]
 
     def save_config(self, values: Dict[str, Any], hermes_home: str) -> None:
@@ -181,11 +202,47 @@ class WikiMemoryProvider(MemoryProvider):
         if not 200 <= cap <= 20000:
             raise ValueError("wiki_context_cap must be between 200 and 20000")
 
+        def validate_role_value(value: Any, key: str) -> str:
+            value = str(value).strip().replace("\\", "/").strip("/")
+            if not value or Path(value).is_absolute() or ".." in Path(value).parts or ":" in value:
+                raise ValueError(f"{key} must be a safe relative Wiki directory")
+            return value
+
+        def safe_role(key: str, default: str) -> str:
+            return validate_role_value(values.get(key, default), key)
+
+        layout = str(values.get("layout", "adopt-existing")).strip()
+        if layout not in {"adopt-existing", "workbench"}:
+            raise ValueError("layout must be adopt-existing or workbench")
+        knowledge_paths = [
+            validate_role_value(item, "knowledge_path")
+            for item in str(values.get("knowledge_path", "Knowledge")).split(",")
+            if item.strip()
+        ]
+        if not knowledge_paths:
+            raise ValueError("knowledge_path must contain at least one directory")
+
         config = read_user_config_raw() or {}
         memory = config.setdefault("memory", {})
         if not isinstance(memory, dict):
             raise ValueError("memory config must be a mapping")
-        memory["wiki"] = {"root": root, "wiki_context_cap": cap}
+        memory["wiki"] = {
+            "root": root,
+            "wiki_context_cap": cap,
+            "gbrain_server": str(values.get("gbrain_server", "gbrain")).strip() or "gbrain",
+            "gbrain_source": str(values.get("gbrain_source", "")).strip(),
+            "layout": layout,
+            "paths": {
+                "capture": safe_role("capture_path", "Inbox"),
+                "projects": safe_role("projects_path", "Projects"),
+                "knowledge": knowledge_paths[0] if len(knowledge_paths) == 1 else knowledge_paths,
+                "archive": safe_role("archive_path", "Archive"),
+                "sources": {
+                    "originals": safe_role("originals_path", "Sources/Originals"),
+                    "processed": safe_role("processed_path", "Sources/Notes"),
+                },
+            },
+        }
         atomic_config_write(get_config_path(), config, sort_keys=False)
 
     def handle_tool_call(self, tool_name: str, args: Dict[str, Any], **kwargs) -> str:
@@ -217,10 +274,11 @@ class WikiMemoryProvider(MemoryProvider):
         try:
             insights = self._extract_insights_llm(messages)
             for insight in insights:
-                self._client.files.append_to_page(
-                    path=insight["path"],
+                self._client.capture_event(
+                    event_type="session_insight",
                     content=insight["content"],
-                    frontmatter=insight.get("frontmatter", {}),
+                    session_id=self._session_id,
+                    metadata=insight.get("frontmatter", {}),
                 )
             logger.info("Wiki provider: persisted %d insights to wiki", len(insights))
         except Exception as e:
@@ -253,18 +311,18 @@ class WikiMemoryProvider(MemoryProvider):
         if not refs:
             return ""
 
-        # Prefetch related wiki content
+        cap = wiki_context_cap(self._active_model, self._provider_config)
         wiki_context = []
         for ref in refs[:5]:  # Limit to top 5 refs
-            result = self._client.gbrain.query(ref, limit=3)
-            if result and not result.startswith("gbrain"):
+            result = self._client.prefetch(ref, limit=3, max_chars=cap)
+            if result:
                 wiki_context.append(f"### {ref}\n{result}")
 
         if not wiki_context:
             return ""
 
         block = "## Wiki Context (pre-compression)\n\n" + "\n\n".join(wiki_context) + "\n"
-        return _truncate_block(block, wiki_context_cap(self._active_model, self._provider_config))
+        return _truncate_block(block, cap)
 
     def on_memory_write(
         self,
@@ -274,23 +332,16 @@ class WikiMemoryProvider(MemoryProvider):
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Mirror built-in memory tool writes to wiki."""
-        if not self._client or action not in ("add", "replace"):
+        if not self._client or action not in ("add", "replace", "remove"):
             return
 
-        # Create dated memory entry page (knowledge/entities/ since Phase 3a fold)
-        date = time.strftime("%Y-%m-%d")
-        path = f"knowledge/entities/memory-entries/{date}.md"
-        entry = f"### {target} ({action})\n\n{content}\n\n---\n"
-
-        self._client.files.append_to_page(
-            path,
-            entry,
-            frontmatter={
-                "type": "memory_entry",
-                "key": target,
+        self._client.capture_event(
+            event_type="explicit_memory",
+            content=content,
+            session_id=self._session_id,
+            metadata={
+                "target": target,
                 "action": action,
-                "session_id": self._session_id,
-                "sources": [],
                 **(metadata or {}),
             },
         )
@@ -301,39 +352,32 @@ class WikiMemoryProvider(MemoryProvider):
             return
 
         child_session_id = kwargs.get("child_session_id", "")
-        date = time.strftime("%Y-%m-%d")
-        path = f"knowledge/entities/delegations/{date}.md"
-
-        entry = (
-            f"### Delegation: {task}\n"
-            f"- **Child session:** {child_session_id}\n"
-            f"- **Parent session:** {self._session_id}\n\n"
-            f"#### Result\n{result}\n\n---\n"
-        )
-
-        self._client.files.append_to_page(
-            path,
-            entry,
-            frontmatter={
-                "type": "delegation",
-                "task": task,
+        self._client.capture_event(
+            event_type="delegation",
+            content=f"Task: {task}\n\nResult:\n{result}",
+            session_id=self._session_id,
+            metadata={
                 "child_session_id": child_session_id,
-                "parent_session_id": self._session_id,
-                "sources": [],
             },
         )
 
     def backup_paths(self) -> List[str]:
-        """Extra paths for `hermes backup`."""
+        """Return canonical provider data; derived GBrain state is rebuilt."""
         paths = []
         provider_config = self._provider_config or _load_provider_config()
         wiki = self._client.wiki if self._client else resolve_wiki_path(provider_config)
         if wiki.exists():
             paths.append(str(wiki))
-        gbrain_dir = _resolve_gbrain_dir()
-        if gbrain_dir is not None and gbrain_dir.exists():
-            paths.append(str(gbrain_dir))
         return paths
+
+    def rebuild_manifest(self) -> Dict[str, Any]:
+        provider_config = self._provider_config or _load_provider_config()
+        wiki = self._client.wiki if self._client else resolve_wiki_path(provider_config)
+        return build_rebuild_manifest(
+            wiki,
+            provider_config,
+            plugin_version=PLUGIN_VERSION,
+        )
 
     # -- Internal helpers -------------------------------------------------------
 
@@ -418,8 +462,6 @@ class WikiMemoryProvider(MemoryProvider):
         )
         if decisions:
             insights.append({
-                "path": f"knowledge/entities/session-insights/{time.strftime('%Y-%m-%d')}-decisions.md",
-                "title": f"Session Decisions — {time.strftime('%Y-%m-%d')}",
                 "content": "\n".join(f"- {d}" for d in decisions),
                 "frontmatter": {
                     "type": "session",
@@ -436,8 +478,6 @@ class WikiMemoryProvider(MemoryProvider):
         )
         if learnings:
             insights.append({
-                "path": f"knowledge/entities/session-insights/{time.strftime('%Y-%m-%d')}-learnings.md",
-                "title": f"Session Learnings — {time.strftime('%Y-%m-%d')}",
                 "content": "\n".join(f"- {item}" for item in learnings),
                 "frontmatter": {
                     "type": "session",
@@ -454,8 +494,6 @@ class WikiMemoryProvider(MemoryProvider):
         )
         if questions:
             insights.append({
-                "path": f"knowledge/entities/session-insights/{time.strftime('%Y-%m-%d')}-open-questions.md",
-                "title": f"Open Questions — {time.strftime('%Y-%m-%d')}",
                 "content": "\n".join(f"- {q}" for q in questions),
                 "frontmatter": {
                     "type": "session",

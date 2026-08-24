@@ -57,21 +57,6 @@ def test_dashboard_uses_wiki_path_fallback(dashboard_module, monkeypatch, tmp_pa
     assert dashboard_module._wiki_root() == env_root.resolve()
 
 
-def test_dashboard_honors_gbrain_home_parent_semantics(
-    dashboard_module, monkeypatch, tmp_path
-):
-    parent = tmp_path / "gbrain-parent"
-    monkeypatch.setenv("GBRAIN_HOME", str(parent))
-
-    assert dashboard_module._gbrain_dir() == (parent / ".gbrain").resolve()
-
-
-def test_dashboard_rejects_invalid_gbrain_home(dashboard_module, monkeypatch):
-    monkeypatch.setenv("GBRAIN_HOME", "relative/../gbrain")
-
-    assert dashboard_module._gbrain_dir() is None
-
-
 @pytest.mark.parametrize(("requested", "expected"), [(-5, 1), (0, 1), (20, 20), (5000, 100)])
 def test_activity_clamps_limit_before_git(
     dashboard_module, monkeypatch, requested, expected
@@ -87,3 +72,136 @@ def test_activity_clamps_limit_before_git(
     dashboard_module.get_activity(requested)
 
     assert calls[0][0][1] == f"-{expected}"
+
+
+def test_overview_reports_degraded_when_only_lexical_recall_is_available(
+    dashboard_module, monkeypatch, tmp_path
+):
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    dashboard_module._test_config_module.load_config_readonly = lambda: {
+        "memory": {
+            "wiki": {
+                "root": str(wiki),
+                "gbrain_server": "gbrain",
+                "gbrain_source": "wiki-main",
+            }
+        }
+    }
+    registry_module = types.ModuleType("tools.registry")
+    registry_module.registry = types.SimpleNamespace(get_entry=lambda name: None)
+    monkeypatch.setitem(sys.modules, "tools.registry", registry_module)
+
+    health = dashboard_module.get_overview()["health"]
+
+    assert health["status"] == "degraded"
+    assert health["lexical_recall"] is True
+    assert health["semantic_recall"] is False
+    assert health["capture_ready"] is False
+
+
+def test_overview_reports_available_for_bound_shared_recall_tool(
+    dashboard_module, monkeypatch, tmp_path
+):
+    wiki = tmp_path / "wiki"
+    (wiki / "Inbox").mkdir(parents=True)
+    dashboard_module._test_config_module.load_config_readonly = lambda: {
+        "memory": {
+            "wiki": {
+                "root": str(wiki),
+                "gbrain_server": "gbrain-local",
+                "gbrain_source": "wiki-main",
+                "paths": {"capture": "Inbox"},
+            }
+        },
+        "mcp_servers": {
+            "gbrain-local": {"timeout": 6, "env": {"GBRAIN_SOURCE": "wiki-main"}}
+        },
+    }
+    registry_module = types.ModuleType("tools.registry")
+    registry_module.registry = types.SimpleNamespace(
+        get_entry=lambda name: types.SimpleNamespace(handler=lambda args: "{}")
+        if name == "mcp__gbrain_local__recall"
+        else None
+    )
+    monkeypatch.setitem(sys.modules, "tools.registry", registry_module)
+
+    health = dashboard_module.get_overview()["health"]
+
+    assert health["status"] == "available"
+    assert health["semantic_recall"] is True
+    assert health["capture_ready"] is True
+
+
+def test_overview_degrades_when_semantic_recall_works_but_capture_role_is_missing(
+    dashboard_module, monkeypatch, tmp_path
+):
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    dashboard_module._test_config_module.load_config_readonly = lambda: {
+        "memory": {
+            "wiki": {
+                "root": str(wiki),
+                "gbrain_server": "gbrain-local",
+                "gbrain_source": "wiki-main",
+                "paths": {"capture": "Inbox"},
+            }
+        },
+        "mcp_servers": {
+            "gbrain-local": {"timeout": 6, "env": {"GBRAIN_SOURCE": "wiki-main"}}
+        },
+    }
+    registry_module = types.ModuleType("tools.registry")
+    registry_module.registry = types.SimpleNamespace(
+        get_entry=lambda name: types.SimpleNamespace(handler=lambda args: "{}")
+    )
+    monkeypatch.setitem(sys.modules, "tools.registry", registry_module)
+
+    health = dashboard_module.get_overview()["health"]
+
+    assert health["semantic_recall"] is True
+    assert health["capture_ready"] is False
+    assert health["status"] == "degraded"
+
+
+def test_counts_follow_configured_semantic_roles(dashboard_module, tmp_path):
+    wiki = tmp_path / "wiki"
+    for relative in (
+        "Inbox/a.md",
+        "Projects/p.md",
+        "Topics/t.md",
+        "Ideas/i.md",
+        "Clippings/raw.md",
+        "Notes/n.md",
+        "Archive/old.md",
+    ):
+        path = wiki / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("page", encoding="utf-8")
+    dashboard_module._test_config_module.load_config_readonly = lambda: {
+        "memory": {
+            "wiki": {
+                "root": str(wiki),
+                "layout": "adopt-existing",
+                "paths": {
+                    "capture": "Inbox",
+                    "projects": "Projects",
+                    "knowledge": ["Topics", "Ideas"],
+                    "archive": "Archive",
+                    "sources": {"originals": "Clippings", "processed": "Notes"},
+                },
+            }
+        }
+    }
+
+    counts = dashboard_module.get_counts()
+
+    assert counts["roles"] == {
+        "capture": 1,
+        "projects": 1,
+        "knowledge": 2,
+        "originals": 1,
+        "processed": 1,
+        "archive": 1,
+    }
+    assert counts["total"] == 7

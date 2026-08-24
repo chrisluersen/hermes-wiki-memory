@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, Optional
@@ -41,15 +42,6 @@ from fastapi import APIRouter
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Subdirectories of knowledge/ we surface counts for.
-_KNOWLEDGE_DIRS = ("concepts", "entities", "comparisons", "queries", "references")
-
-# Subdirectories of knowledge/entities/ (where the provider writes dated pages).
-_ENTITIES_SUBDIRS = (
-    "cooking", "delegations", "fleet", "games", "memory-entries",
-    "profiles", "repos", "session-insights",
-)
 
 
 def _hermes_root() -> Path:
@@ -83,14 +75,76 @@ def _wiki_root() -> Path:
     return (_hermes_root() / "wiki").resolve()
 
 
-def _gbrain_dir() -> Optional[Path]:
-    parent = os.environ.get("GBRAIN_HOME", "").strip()
-    if not parent:
-        return (Path.home() / ".gbrain").resolve()
-    raw = Path(parent).expanduser()
-    if not raw.is_absolute() or ".." in raw.parts:
-        return None
-    return (raw / ".gbrain").resolve()
+def _wiki_config() -> dict[str, Any]:
+    try:
+        from hermes_cli.config import load_config_readonly
+
+        config = load_config_readonly() or {}
+        memory = config.get("memory", {}) if isinstance(config, dict) else {}
+        wiki = memory.get("wiki", {}) if isinstance(memory, dict) else {}
+        return wiki if isinstance(wiki, dict) else {}
+    except Exception:
+        return {}
+
+
+def _health(wiki: Path) -> dict[str, Any]:
+    cfg = _wiki_config()
+    server = str(cfg.get("gbrain_server", "gbrain")).strip() or "gbrain"
+    source = str(cfg.get("gbrain_source", "")).strip()
+    attested_source = ""
+    timeout: Any = None
+    try:
+        from hermes_cli.config import load_config_readonly
+
+        full = load_config_readonly() or {}
+        servers = full.get("mcp_servers", {}) if isinstance(full, dict) else {}
+        server_cfg = servers.get(server, {}) if isinstance(servers, dict) else {}
+        if isinstance(server_cfg, dict):
+            env = server_cfg.get("env", {}) if isinstance(server_cfg.get("env", {}), dict) else {}
+            attested_source = str(env.get("GBRAIN_SOURCE", "")).strip()
+            timeout = server_cfg.get("timeout")
+    except Exception:
+        pass
+    readable = wiki.is_dir() and os.access(wiki, os.R_OK)
+    writable = wiki.is_dir() and os.access(wiki, os.W_OK)
+    paths = cfg.get("paths", {}) if isinstance(cfg.get("paths", {}), dict) else {}
+    capture_path = str(paths.get("capture", "Inbox")).strip().replace("\\", "/")
+    capture = wiki / capture_path
+    capture_ready = capture.is_dir() and os.access(capture, os.W_OK)
+    semantic = False
+    if (
+        readable
+        and source
+        and source == attested_source
+        and isinstance(timeout, (int, float))
+        and 0 < float(timeout) <= 7
+    ):
+        try:
+            from tools.registry import registry
+
+            safe_server = re.sub(r"[^A-Za-z0-9_]", "_", server)
+            semantic = registry.get_entry(f"mcp__{safe_server}__recall") is not None
+        except Exception:
+            semantic = False
+    status = (
+        "unavailable"
+        if not readable
+        else "available"
+        if semantic and writable and capture_ready
+        else "degraded"
+    )
+    return {
+        "status": status,
+        "wiki_readable": readable,
+        "wiki_writable": writable,
+        "lexical_recall": readable,
+        "semantic_recall": semantic,
+        "capture_ready": capture_ready,
+        "capture_path": capture_path,
+        "gbrain_server": server,
+        "gbrain_source": source,
+    }
+
 
 
 def _git(*args: str, cwd: Path) -> Optional[str]:
@@ -118,31 +172,6 @@ def _count_md(root: Path) -> int:
     return sum(1 for p in root.glob("*.md"))
 
 
-def _gbrain_available() -> dict[str, Any]:
-    """Probe gbrain WITHOUT running doctor (advisory-lock hang trap)."""
-    gb = _gbrain_dir()
-    cfg = gb / "config.json" if gb is not None else None
-    bin_name = "gbrain" if _platform_is_posix() else "gbrain.cmd"
-    on_path = _which(bin_name) or _which("gbrain")
-    return {
-        "binary_on_path": bool(on_path),
-        "config_exists": bool(cfg and cfg.exists()),
-        "config_path": str(cfg) if cfg else "",
-    }
-
-
-def _platform_is_posix() -> bool:
-    import os
-    return os.name == "posix"
-
-
-def _which(name: str) -> Optional[str]:
-    from shutil import which
-    try:
-        return which(name)
-    except Exception:
-        return None
-
 
 @router.get("/overview")
 def get_overview() -> dict[str, Any]:
@@ -154,7 +183,7 @@ def get_overview() -> dict[str, Any]:
         "git_head": _git("rev-parse", "--short", "HEAD", cwd=wiki),
         "git_branch": _git("branch", "--show-current", cwd=wiki),
         "git_ahead": _git_ahead(wiki),
-        "gbrain": _gbrain_available(),
+        "health": _health(wiki),
         "last_commit": _last_commit(wiki),
     }
 
@@ -200,18 +229,27 @@ def get_activity(limit: int = 15) -> dict[str, Any]:
 
 @router.get("/counts")
 def get_counts() -> dict[str, Any]:
-    """Page counts by knowledge category and entities subdir."""
+    """Page counts by configured semantic role."""
     wiki = _wiki_root()
-    knowledge = wiki / "knowledge"
-    categories: dict[str, int] = {}
-    for d in _KNOWLEDGE_DIRS:
-        categories[d] = _count_md(knowledge / d)
-    entities_dir = knowledge / "entities"
-    entities_subdirs: dict[str, int] = {}
-    for d in _ENTITIES_SUBDIRS:
-        entities_subdirs[d] = _count_md(entities_dir / d)
-    return {
-        "categories": categories,
-        "entities_subdirs": entities_subdirs,
-        "total": sum(categories.values()),
+    cfg = _wiki_config()
+    paths = cfg.get("paths", {}) if isinstance(cfg.get("paths", {}), dict) else {}
+    sources = paths.get("sources", {}) if isinstance(paths.get("sources", {}), dict) else {}
+
+    def values(value: Any, default: str) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value if str(item).strip()]
+        return [str(value or default)]
+
+    role_paths = {
+        "capture": values(paths.get("capture"), "Inbox"),
+        "projects": values(paths.get("projects"), "Projects"),
+        "knowledge": values(paths.get("knowledge"), "Knowledge"),
+        "originals": values(sources.get("originals"), "Sources/Originals"),
+        "processed": values(sources.get("processed"), "Sources/Notes"),
+        "archive": values(paths.get("archive"), "Archive"),
     }
+    roles = {
+        role: sum(1 for relative in relatives for path in (wiki / relative).rglob("*.md") if path.is_file())
+        for role, relatives in role_paths.items()
+    }
+    return {"roles": roles, "total": sum(roles.values())}

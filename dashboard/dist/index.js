@@ -2,8 +2,8 @@
  * Hermes Wiki Memory — Dashboard Plugin
  *
  * Status + activity pane for the wiki memory provider:
- *   - Overview — wiki location, git head/branch, gbrain availability, last commit
- *   - Counts   — pages by knowledge/ category and by entities subdir
+ *   - Overview — wiki location, git head/branch, recall/capture health, last commit
+ *   - Counts   — pages by configured semantic role
  *   - Activity — recent commits to the knowledge base (the durable activity log)
  *
  * Plain IIFE, no build step. Uses window.__HERMES_PLUGIN_SDK__ for React +
@@ -67,15 +67,17 @@
     const git = data.git_branch || "?";
     const head = data.git_head || "—";
     const ahead = data.git_ahead && data.git_ahead !== "0" ? data.git_ahead : null;
-    const gb = data.gbrain || {};
-    const gbOk = gb.binary_on_path && gb.config_exists;
+    const health = data.health || {};
     const last = data.last_commit;
 
     const rows = [
       { label: "Wiki root", value: data.wiki_exists ? data.wiki_root : "(missing)", ok: !!data.wiki_exists },
       { label: "Branch", value: git },
       { label: "Head", value: head, extra: ahead ? `${ahead} unpushed` : null, ok: !ahead },
-      { label: "gbrain", value: gbOk ? "available" : "unavailable", ok: gbOk },
+      { label: "Provider", value: health.status || "unknown", ok: health.status === "available" },
+      { label: "Lexical recall", value: health.lexical_recall ? "available" : "unavailable", ok: !!health.lexical_recall },
+      { label: "Semantic recall", value: health.semantic_recall ? "available" : "degraded", ok: !!health.semantic_recall },
+      { label: "Capture", value: health.capture_ready ? health.capture_path : "not ready", ok: !!health.capture_ready },
     ];
 
     return h(
@@ -145,15 +147,12 @@
 
   function CountsCard({ data }) {
     if (!data) return null;
-    const cats = data.categories || {};
-    const subs = data.entities_subdirs || {};
+    const cats = data.roles || {};
     const total = data.total || 0;
     const entries = Object.keys(cats).map(function (k) {
       return h(CountBar, { key: k, label: CATEGORY_LABELS[k] || k, value: cats[k], total: total });
     });
-    const subEntries = Object.keys(subs).map(function (k) {
-      return h(CountBar, { key: k, label: k, value: subs[k], total: total });
-    });
+
     return h(
       Card,
       null,
@@ -166,11 +165,7 @@
           total,
           " pages"
         ),
-        h("div", { className: "wiki-counts" }, entries),
-        subEntries.length
-          ? h("h4", { className: "wiki-sec-subtitle" }, "Entities subdirs (provider writes)")
-          : null,
-        subEntries.length ? h("div", { className: "wiki-counts" }, subEntries) : null
+        h("div", { className: "wiki-counts" }, entries)
       )
     );
   }

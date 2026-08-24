@@ -1,157 +1,241 @@
-# Setup — the full Hermes Wiki-Memory stack
+# Setup — Hermes Wiki Memory candidate 0.4.0
 
-This repository describes a local-first alternative to cloud memory providers
-(Honcho, Hindsight, Mem0, etc.). Release `0.3.2` is experimental and must not be
-treated as a production-ready replacement: the reliability roadmap's P0/P1
-acceptance tests are not yet complete.
+This guide is for isolated development and approval-gated activation. The candidate is not released or enabled against canonical data by this document.
 
-Four pieces are intended to work together:
+## Architecture
 
-| # | Piece | Where | What it does |
-|---|---|---|---|
-| 1 | **Memory provider** | `__init__.py` + `wiki_client.py` | per-turn semantic recall + session persistence |
-| 2 | **GBrain** | upstream GBrain install/onboarding | builds the derived knowledge graph and exposes retrieval tools |
-| 3 | **The wiki** | Hermes skill `llm-wiki` | Karpathy-pattern interlinked markdown KB (your actual knowledge base) |
-| 4 | **Maintenance** | GBrain CLI plus future plugin automation | sync, embed, extract, doctor, backup and restore checks |
+| Component | Owner | Role |
+|---|---|---|
+| Hermes | Hermes Agent | Sessions, provider lifecycle, hooks, MCP connections, configuration |
+| Markdown Wiki | User | Canonical durable knowledge |
+| Git | User/automation | Optional Wiki history; this plugin does not commit |
+| GBrain | Shared Hermes MCP owner | Optional derived semantic retrieval |
+| This plugin | `wiki` provider | Recall adapter, safe capture, role mapping, health, backup declaration |
 
-Hermes Agent currently ships `llm-wiki`. GBrain has its own install/onboarding
-and skill bundle. This repository does not assume Hermes catalog entries named
-`gbrain-integration` or `wiki-maintenance`.
-
-The design advantage is a **human-curated, git-versioned Markdown Wiki you
-own**—with provenance and cross-links—instead of opaque cloud memories. The
-target architecture shares one configured Wiki and one GBrain owner across
-profiles/bots; release `0.3.2` does not yet satisfy that ownership contract.
-
----
+The provider never starts or stops GBrain and never falls back to one-shot GBrain CLI calls.
 
 ## 0. Prerequisites
 
-- [Hermes Agent](https://hermes-agent.nousresearch.com) (any platform)
-- [Bun](https://bun.sh) (required by gbrain)
-- An embeddings backend supported by the installed GBrain version, if semantic
-  retrieval is required. Lexical fallback remains roadmap work in this plugin.
+- Current Hermes Agent.
+- A disposable test Wiki with an existing capture directory.
+- For semantic recall only: a configured shared GBrain MCP server exposing the `verbs` surface and `recall`.
+- Approved embedding credentials/model belong to GBrain, not this repository.
 
-## 1. Install the plugin (experimental only)
+## 1. Validate locally; install only a reviewed commit
 
-Do not enable release `0.3.2` against canonical data. The commands below are
-retained for development/test environments while the hardening roadmap is in
-progress.
-
-```bash
-hermes plugins install chrisluersen/hermes-wiki-memory --enable
-hermes config set memory.provider wiki
-hermes config set memory.wiki.root C:/path/to/wiki       # optional
-hermes config set memory.wiki.wiki_context_cap 1200   # optional recall budget
-hermes gateway restart
-hermes memory status     # Provider: wiki / Plugin: installed / Status: available
-```
-
-> Use the `owner/repo` shorthand, not a `github:` prefix — the prefix mangles
-> the URL (`github.com/github:chrisluersen/...`) and breaks install.
-
-## 2. Install gbrain + build the brain
+The unreleased candidate in a working tree is not installed by the
+`owner/repo` command below. Validate local source without enabling it:
 
 ```bash
-bun install -g github:garrytan/gbrain
+python tests/run.py
+hermes plugins doctor --ci C:/path/to/hermes-wiki-memory
 ```
 
-Follow the documentation shipped with the installed GBrain version to create a
-brain/source and expose its supported retrieval surface to Hermes. Do not infer
-commands from this experimental plugin; GBrain's interface changes independently.
+After a reviewed commit is published, create and select a disposable profile,
+then install that exact 40-character commit **disabled**:
 
-## 3. Adopt or scaffold the wiki
+```bash
+hermes profile create wiki-test --no-skills
+hermes profile use wiki-test
+hermes plugins install chrisluersen/hermes-wiki-memory --ref <REVIEWED_40_CHAR_SHA> --no-enable
+```
 
-Follow the `llm-wiki` skill (Karpathy pattern): a plain Markdown directory
-(no canonical database) of interlinked pages. The hardened plugin will not
-require one physical taxonomy. In the target design, folders represent coarse
-operational roles; page type, status, provenance, and identity belong in
-frontmatter and links. Release `0.3.2` still writes to hardcoded legacy paths.
+Confirm `hermes profile show wiki-test` identifies the disposable profile. Then
+configure it through `hermes memory setup wiki` (or the equivalent profile-local
+configuration UI) with a disposable Wiki root and existing capture directory.
+Review the saved disposable profile/root configuration before enabling. Then
+enable the provider and inspect its runtime status:
 
-After roadmap item P0.2 is implemented, the planned new-Wiki default is this
-deliberately small layout:
+```bash
+hermes plugins enable wiki --no-allow-tool-override
+hermes memory status
+```
+
+Restart only the disposable profile's surfaces if the installed Hermes version
+requires it. When testing is complete, restore the prior sticky profile with
+`hermes profile use <ORIGINAL_PROFILE>`. Do not point either profile at the
+canonical Wiki during this procedure.
+
+A `degraded` lexical-only state is expected until semantic source/timeout attestation is configured.
+
+## 2. Adopt an existing Wiki without moving content
+
+Example:
+
+```yaml
+memory:
+  provider: wiki
+  wiki:
+    root: C:/path/to/wiki
+    layout: adopt-existing
+    wiki_context_cap: 1200
+    paths:
+      capture: Inbox
+      projects: Projects
+      knowledge: [Topics, Ideas]
+      sources:
+        originals: Clippings
+        processed: Notes
+      archive: Archive
+```
+
+Rules:
+
+- Use exact on-disk spelling and case.
+- Every configured role is root-relative.
+- Role resolution creates nothing and moves nothing.
+- Automatic capture refuses to create a missing capture directory.
+- Missing optional roles may be omitted from raw config; the setup UI currently emits scalar fields and uses comma-separated knowledge paths.
+
+For a separately approved new-Wiki scaffold, use:
 
 ```text
-wiki/
-  AGENTS.md                    # workspace context, if used
-  SCHEMA.md                    # structure authority
-  index.md                     # human navigation
-  log.md                       # append-only operation history
-  Inbox/                       # unclassified capture
-  Projects/                    # active finite outcomes
-  Knowledge/                   # durable concepts, decisions, runbooks, syntheses
-  Sources/
-    Originals/                 # preserved external source material
-    Notes/                     # processed single-source records
-  Archive/                     # inactive or superseded material
-  _meta/                       # generated/control artifacts
+Inbox/
+Projects/
+Knowledge/
+Sources/Originals/
+Sources/Notes/
+Archive/
+_meta/
 ```
 
-For an existing Wiki, the roadmap target is `layout: adopt-existing`: map its
-current folders to these roles and do not perform a big-bang move. A common
-compatibility map is `Clippings/` → Sources/Originals, `Notes/` → Sources/Notes,
-and `Topics/` + `Ideas/` → Knowledge. The physical folders can retain their old
-names until stable IDs, redirects, link rewriting, backups, and retrieval tests
-make a move worthwhile. The current release documents this target; it does not
-yet implement every mapping option. Configuration must preserve each path's
-exact on-disk spelling and case. See the
-[Wiki folder mapping contract](docs/WIKI-FOLDER-MAPPING.md) for compatibility,
-retrieval, and no-big-bang migration rules.
+## 3. Configure optional shared GBrain semantic recall
 
-Release `0.3.2` effectively initializes the provider at
-`<HERMES_ROOT>/wiki`. Current unreleased hardening centralizes path resolution
-with `memory.wiki.root` → `WIKI_PATH` → default precedence; do not treat it as
-released behavior until a subsequent tagged release passes the remaining gates.
+The provider uses Hermes's already-registered MCP tool:
 
-## 4. Set up maintenance
-
-Do not schedule maintenance from a `wiki-maintenance` Hermes skill; no such
-bundled catalog entry currently exists. Before production use, the hardened
-plugin must document and test an idempotent maintenance path for the pinned
-GBrain version, including sync, stale embedding/extraction work, health, backup,
-and representative restore.
-
-Back up canonical data with a separately verified procedure. Do not assume
-release `0.3.2` discovers the actual GBrain store: its `backup_paths()` assumes
-`~/.gbrain`. Current unreleased hardening adds pre-init Wiki discovery and
-`GBRAIN_HOME/.gbrain` support, but representative restore remains required
-before backup coverage is claimed. Hermes archives external provider paths only
-when they are under the user home; configure and verify a separate backup for
-roots on other drives or outside that boundary.
-
-## 5. Verify
-
-In an isolated development fixture, run `hermes memory status` and `gbrain
-doctor`, then verify a capture and recall round-trip. Do not treat a reported
-`available` status as proof that shared ownership, fallback, backup, or restore
-acceptance tests pass.
-
----
-
-## Profiles / bots
-
-The target architecture lets every approved profile and Bot Mode bot use one
-configured Wiki through one shared GBrain owner. Release `0.3.2` still starts a
-process-local `gbrain serve`, so concurrent profiles can contend for PGLite
-ownership instead of safely sharing it. Do not enable multi-profile use until
-P0.3 passes.
-
-> **Note for profile installs:** a `hermes profile create --clone` does NOT copy
-> plugins. After cloning a profile, copy the plugin files into the profile's
-> plugin dir (or `hermes plugins install` per profile) or `memory status` reports
-> "NOT installed ✗".
-
-## Files
-
-```
-plugin.yaml                          # plugin manifest
-__init__.py                          # WikiMemoryProvider prototype lifecycle hooks
-wiki_client.py                       # GBrainClient (serve/JSON-RPC) + file ops
-SETUP.md                             # this file
+```text
+mcp__<sanitized-server-name>__recall
 ```
 
-Hermes Agent currently supplies `llm-wiki`; GBrain setup and maintenance remain
-owned by GBrain and the future hardened integration.
+The MCP server must expose GBrain's `verbs` surface. The exact command and arguments depend on the installed GBrain version and should come from its documentation.
+
+Provider admission requires both:
+
+```yaml
+memory:
+  wiki:
+    gbrain_server: gbrain-local
+    gbrain_source: hermes-wiki
+
+mcp_servers:
+  gbrain-local:
+    timeout: 6
+    env:
+      GBRAIN_SOURCE: hermes-wiki
+```
+
+Safety requirements:
+
+- `GBRAIN_SOURCE` must exactly equal `memory.wiki.gbrain_source`.
+- `timeout` must be greater than zero and no more than seven seconds, below Hermes's external-memory prefetch deadline.
+- The registered `recall` tool must belong to the configured MCP server toolset.
+- The provider sends `query`, `limit`, and `budget_tokens`; source scope is fixed at the server boundary.
+
+If any check fails, semantic calls are skipped and bounded lexical recall is used.
+
+## 4. Capture behavior
+
+Automatic events land only under the configured capture role:
+
+```text
+<capture>/wke_<stable-event-id>.md
+```
+
+Properties:
+
+- Hermes forced secret redaction runs before hashing and persistence.
+- Identical replay returns the existing page without changing bytes or timestamps.
+- A same-path/different-ID collision fails without overwrite.
+- Session insights are labeled heuristic captures.
+- Delegations and explicit memory add/replace/remove actions preserve provenance metadata.
+- No automatic capture edits Topics, Ideas, Projects, Notes, Clippings, or other established pages.
+- Full transcripts remain canonical in Hermes.
+
+## 5. Retrieval policy
+
+Lexical recall:
+
+- searches only contained Markdown;
+- rejects symlinked escapes;
+- excludes `.git`, `.hermes`, `.gbrain`, `_meta`, sessions, generated, caches, quarantine, and build directories;
+- prefers Knowledge/Topics/Ideas, then Projects;
+- demotes Sources/Clippings and Archive;
+- caps files, bytes per file, total bytes, elapsed time, result count, and injected characters.
+
+Writes are serialized for cooperative plugin writers and containment is
+revalidated under the page lock. A malicious external process racing a Windows
+junction/reparse swap after that check is outside this Python path-based threat
+model; use OS ACLs to prevent untrusted mutation of the Wiki parent directories.
+
+Semantic GBrain recall wins when admitted and successful; all failures degrade to lexical recall.
+
+## 6. Health
+
+`available` requires:
+
+- readable/writable Wiki;
+- lexical recall;
+- writable configured capture role;
+- exact shared-MCP source/timeout attestation; and
+- registered GBrain `recall` tool.
+
+`degraded` means Wiki lexical recall still works while capture or semantic retrieval is unavailable. `unavailable` means there is no safe Wiki recall path.
+
+The dashboard is read-only and never calls lock-taking GBrain doctor commands.
+
+## 7. Backup and recovery
+
+`backup_paths()` returns the canonical Markdown Wiki only. GBrain is derived and rebuilt.
+
+Before activation:
+
+1. Verify the Wiki is actually included by the chosen backup process. Hermes skips external provider paths outside the user home.
+2. Generate/retain the provider rebuild manifest.
+3. Restore to a separate temporary location.
+4. Verify exact tree digest, representative bytes, Git HEAD and `git fsck --strict`.
+5. Verify lexical recall and exclusion policy.
+6. Only with separate approval, build a fresh isolated GBrain home, register the restored source, run full sync/embed, and verify semantic recall.
+
+Never test recovery against the active PGLite store.
+
+## 8. Plugin-code removal
+
+Normal `hermes plugins remove wiki` removes the plugin install directory. The
+provider's tested removal helper refuses to proceed if a declared retained path
+is inside that directory. Plugin-code removal must retain:
+
+- Wiki files and Git history;
+- GBrain state;
+- Hermes sessions/state.db;
+- built-in Hermes memory; and
+- user configuration, which may need manual cleanup afterward.
+
+This is not a claim about full Hermes uninstall. Full Hermes uninstall can
+remove an in-root Wiki and therefore requires a verified backup. No full
+uninstall is authorized by this guide.
+
+## 9. Development verification
+
+```bash
+python tests/run.py
+python -m py_compile __init__.py wiki_client.py recovery.py dashboard/plugin_api.py
+hermes plugins doctor --ci .
+```
+
+CI runs the behavioral suite on Ubuntu and Windows. A symlink test may skip on Windows processes lacking symlink privileges.
+
+## 10. Production gates
+
+Production use requires separate approval for:
+
+- exact live GBrain MCP source/timeout configuration;
+- disposable installation/restart testing;
+- representative private-Wiki restore;
+- isolated semantic rebuild with approved embedding settings;
+- release tag/GitHub Release; and
+- canonical-profile enablement.
+
+Do not bundle live Wiki migration, GBrain schema changes, active-store reinitialization, or full Hermes uninstall with plugin activation.
 
 ## License
 

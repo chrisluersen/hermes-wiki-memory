@@ -1,0 +1,51 @@
+name: Bug report
+description: Report reproducible incorrect behavior without private data
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste credentials, private Wiki content, personal information, or production paths. Use a synthetic fixture.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Synthetic reproduction
+      description: Minimal steps using disposable data.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Plugin commit or tag
+    validations:
+      required: true
+  - type: input
+    id: hermes
+    attributes:
+      label: Hermes version
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Windows, macOS, Linux, WSL, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification output
+      description: Sanitized test/error output and whether canonical bytes changed.

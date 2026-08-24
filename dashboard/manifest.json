@@ -1,9 +1,9 @@
 {
   "name": "wiki",
   "label": "Wiki",
-  "description": "Brain health + activity for the wiki memory provider — page counts by category, recent commits to the knowledge base, gbrain availability. Read-only status pane.",
+  "description": "Read-only Wiki memory health, semantic-role counts, capture readiness, and Git activity.",
   "icon": "FileText",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "tab": {
     "path": "/wiki",
     "position": "end"
