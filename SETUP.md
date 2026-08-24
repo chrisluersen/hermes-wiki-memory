@@ -1,25 +1,27 @@
 # Setup — the full Hermes Wiki-Memory stack
 
-This repo is more than a plugin. It's a self-contained **local-first replacement for
-the cloud memory providers** (Honcho, Hindsight, Mem0, etc.). Four pieces work
-together; install all of them or the recall layer is incomplete:
+This repository describes a local-first alternative to cloud memory providers
+(Honcho, Hindsight, Mem0, etc.). Release `0.3.2` is experimental and must not be
+treated as a production-ready replacement: the reliability roadmap's P0/P1
+acceptance tests are not yet complete.
+
+Four pieces are intended to work together:
 
 | # | Piece | Where | What it does |
 |---|---|---|---|
 | 1 | **Memory provider** | `__init__.py` + `wiki_client.py` | per-turn semantic recall + session persistence |
-| 2 | **gbrain** | Hermes skill `gbrain-integration` | installs gbrain, builds the knowledge graph, wires gbrain MCP tools |
+| 2 | **GBrain** | upstream GBrain install/onboarding | builds the derived knowledge graph and exposes retrieval tools |
 | 3 | **The wiki** | Hermes skill `llm-wiki` | Karpathy-pattern interlinked markdown KB (your actual knowledge base) |
-| 4 | **Maintenance** | Hermes skill `wiki-maintenance` | cron-driven health pipeline: sync, embed, extract, doctor |
+| 4 | **Maintenance** | GBrain CLI plus future plugin automation | sync, embed, extract, doctor, backup and restore checks |
 
-The three skills (2–4) ship with Hermes Agent — install them from your skill catalog:
-`gbrain-integration`, `llm-wiki`, `wiki-maintenance`. This plugin provides piece 1,
-the memory provider that ties them together.
+Hermes Agent currently ships `llm-wiki`. GBrain has its own install/onboarding
+and skill bundle. This repository does not assume Hermes catalog entries named
+`gbrain-integration` or `wiki-maintenance`.
 
-Why this beats the stock providers: the knowledge base is a **human-curated,
-git-versioned markdown wiki you own** — with provenance and cross-links — instead
-of opaque cloud memories. And it's **shared across every profile/bot** (the wiki
-lives at the Hermes root, so `light`, `heavy`, and `default` all read/write the
-same brain).
+The design advantage is a **human-curated, git-versioned Markdown Wiki you
+own**—with provenance and cross-links—instead of opaque cloud memories. The
+target architecture shares one configured Wiki and one GBrain owner across
+profiles/bots; release `0.3.2` does not yet satisfy that ownership contract.
 
 ---
 
@@ -27,10 +29,14 @@ same brain).
 
 - [Hermes Agent](https://hermes-agent.nousresearch.com) (any platform)
 - [Bun](https://bun.sh) (required by gbrain)
-- An embeddings backend. The default here uses `ZEROENTROPY_API_KEY`; a local
-  model via Ollama works too (see `gbrain-integration` skill).
+- An embeddings backend supported by the installed GBrain version, if semantic
+  retrieval is required. Lexical fallback remains roadmap work in this plugin.
 
-## 1. Install the plugin
+## 1. Install the plugin (experimental only)
+
+Do not enable release `0.3.2` against canonical data. The commands below are
+retained for development/test environments while the hardening roadmap is in
+progress.
 
 ```bash
 hermes plugins install chrisluersen/hermes-wiki-memory --enable
@@ -47,62 +53,84 @@ hermes memory status     # Provider: wiki / Plugin: installed / Status: availabl
 
 ```bash
 bun install -g github:garrytan/gbrain
-# gbrain installs its skills to ~/.bun/install/global/node_modules/gbrain/skills
-# Follow the gbrain-integration skill for the knowledge graph + MCP tool wiring
 ```
 
-The `gbrain-integration` skill (installed from your Hermes skill catalog) covers
-the full setup: install gbrain, create the knowledge graph from your wiki, and
-expose gbrain's `search`/`think` as MCP tools in Hermes.
+Follow the documentation shipped with the installed GBrain version to create a
+brain/source and expose its supported retrieval surface to Hermes. Do not infer
+commands from this experimental plugin; GBrain's interface changes independently.
 
-## 3. Scaffold the wiki
+## 3. Adopt or scaffold the wiki
 
-Follow the `llm-wiki` skill (Karpathy pattern): a plain markdown dir
-(no DB) of interlinked pages. Canonical structure when the wiki is used with the
-tracking system:
+Follow the `llm-wiki` skill (Karpathy pattern): a plain Markdown directory
+(no canonical database) of interlinked pages. The hardened plugin will not
+require one physical taxonomy. In the target design, folders represent coarse
+operational roles; page type, status, provenance, and identity belong in
+frontmatter and links. Release `0.3.2` still writes to hardcoded legacy paths.
 
-```
+After roadmap item P0.2 is implemented, the planned new-Wiki default is this
+deliberately small layout:
+
+```text
 wiki/
-  index.md
-  governance/SCHEMA.md        # structure authority
-  knowledge/
-    concepts/  entities/  comparisons/  queries/  references/
-  work/  personal/  sessions/  plans/
+  AGENTS.md                    # workspace context, if used
+  SCHEMA.md                    # structure authority
+  index.md                     # human navigation
+  log.md                       # append-only operation history
+  Inbox/                       # unclassified capture
+  Projects/                    # active finite outcomes
+  Knowledge/                   # durable concepts, decisions, runbooks, syntheses
+  Sources/
+    Originals/                 # preserved external source material
+    Notes/                     # processed single-source records
+  Archive/                     # inactive or superseded material
+  _meta/                       # generated/control artifacts
 ```
 
-The wiki path defaults to `<HERMES_ROOT>/wiki` (shared across every profile/bot).
-To point it elsewhere, set `WIKI_PATH` in `$HERMES_HOME/.env` — the plugin reads
-it at load time.
+For an existing Wiki, the roadmap target is `layout: adopt-existing`: map its
+current folders to these roles and do not perform a big-bang move. A common
+compatibility map is `Clippings/` → Sources/Originals, `Notes/` → Sources/Notes,
+and `Topics/` + `Ideas/` → Knowledge. The physical folders can retain their old
+names until stable IDs, redirects, link rewriting, backups, and retrieval tests
+make a move worthwhile. The current release documents this target; it does not
+yet implement every mapping option. Configuration must preserve each path's
+exact on-disk spelling and case. See the
+[Wiki folder mapping contract](docs/WIKI-FOLDER-MAPPING.md) for compatibility,
+retrieval, and no-big-bang migration rules.
+
+Release `0.3.2` effectively initializes the provider at
+`<HERMES_ROOT>/wiki`. Although the file client resolves `WIKI_PATH`, provider
+initialization currently bypasses that override. Do not rely on a custom path
+until P0.2 centralizes path resolution and its tests pass.
 
 ## 4. Set up maintenance
 
-Schedule the health pipeline from the `wiki-maintenance` skill — sync →
-embed → extract → doctor. Typical cron:
+Do not schedule maintenance from a `wiki-maintenance` Hermes skill; no such
+bundled catalog entry currently exists. Before production use, the hardened
+plugin must document and test an idempotent maintenance path for the pinned
+GBrain version, including sync, stale embedding/extraction work, health, backup,
+and representative restore.
 
-```bash
-hermes cron add "0 3 * * *" "wiki maintenance: sync, embed stale, extract sessions, doctor" \
-  --skill wiki-maintenance
-```
-
-And back the store up weekly — `scripts/hermes-store-backup.py` in the Hermes
-config repo, or `hermes backup` (the wiki + `~/.gbrain` are both included).
+Back up canonical data with a separately verified procedure. Do not assume
+release `0.3.2` discovers the actual GBrain store: its `backup_paths()` still
+assumes `~/.gbrain`. The roadmap requires configured-path discovery and a
+representative restore drill before backup coverage is claimed.
 
 ## 5. Verify
 
-```bash
-hermes memory status                     # provider available
-gbrain doctor                            # health score
-# Open a session, talk about something already in the wiki, confirm recall.
-```
+In an isolated development fixture, run `hermes memory status` and `gbrain
+doctor`, then verify a capture and recall round-trip. Do not treat a reported
+`available` status as proof that shared ownership, fallback, backup, or restore
+acceptance tests pass.
 
 ---
 
 ## Profiles / bots
 
-Because the wiki resolves to the Hermes **root**, every profile and Bot Mode bot
-queries and writes the **same** brain — no per-bot memory fragmentation. A `light`
-worker and a `heavy` worker share one knowledge base, each with its own model and
-token budget.
+The target architecture lets every approved profile and Bot Mode bot use one
+configured Wiki through one shared GBrain owner. Release `0.3.2` still starts a
+process-local `gbrain serve`, so concurrent profiles can contend for PGLite
+ownership instead of safely sharing it. Do not enable multi-profile use until
+P0.3 passes.
 
 > **Note for profile installs:** a `hermes profile create --clone` does NOT copy
 > plugins. After cloning a profile, copy the plugin files into the profile's
@@ -113,13 +141,13 @@ token budget.
 
 ```
 plugin.yaml                          # plugin manifest
-__init__.py                          # WikiMemoryProvider (MemoryProvider ABC)
+__init__.py                          # WikiMemoryProvider prototype lifecycle hooks
 wiki_client.py                       # GBrainClient (serve/JSON-RPC) + file ops
 SETUP.md                             # this file
 ```
 
-The companion skills (`gbrain-integration`, `llm-wiki`, `wiki-maintenance`)
-ship with Hermes Agent — install from your skill catalog.
+Hermes Agent currently supplies `llm-wiki`; GBrain setup and maintenance remain
+owned by GBrain and the future hardened integration.
 
 ## License
 

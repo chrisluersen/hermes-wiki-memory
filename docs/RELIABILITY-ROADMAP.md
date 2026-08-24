@@ -35,14 +35,24 @@ Acceptance:
 - Use it in the provider, file client, dashboard, backup declaration, and tests.
 - Honor `WIKI_PATH` as a compatibility override while preferring
   `memory.wiki.root` for normal setup.
-- Support semantic-role folder mapping instead of hardcoded `knowledge/...`
-  paths.
+- Support semantic-role folder mapping instead of hardcoded
+  `knowledge/...`/`work/...` paths.
+- Provide an `adopt-existing` layout that maps existing folders without moving
+  content. The new-Wiki default is `Inbox/`, `Projects/`, `Knowledge/`,
+  `Sources/Originals/`, `Sources/Notes/`, `Archive/`, and `_meta/`.
+- Treat `Clippings/` as a compatible existing name for `Sources/Originals/`
+  and `Topics/`/`Ideas/` as compatible existing names for `Knowledge/`.
+- Keep page subtype, lifecycle, provenance, and stable identity in frontmatter
+  and links rather than multiplying folders.
 
 Acceptance:
 
 - A custom Wiki root controls every read, write, dashboard count, and backup path.
 - No code path silently falls back to `<HERMES_ROOT>/wiki` after configuration.
 - Existing six-folder and generic Wiki fixtures require no migration.
+- A new-Wiki fixture uses the small role-based layout without requiring
+  `entities/`, `concepts/`, `comparisons/`, `queries/`, `work/`, `personal/`,
+  `sessions/`, or `plans/` directories.
 
 ### P0.3 Use one GBrain owner
 
@@ -97,7 +107,22 @@ Acceptance:
 - Recall stays within configured context size.
 - Recalled context is fenced so it is not recursively captured as new memory.
 
-### P1.3 Add truthful health
+### P1.3 Apply explicit Wiki retrieval policy
+
+- Hard-exclude runtime, generated, cache, session-export, and quarantine paths.
+- Demote preserved originals and Archive content by default.
+- Prefer durable Knowledge and active project outcomes for ordinary recall.
+- Keep full Hermes sessions in Hermes state; if transcript derivatives are
+  indexed, isolate them as a separate derived source.
+
+Acceptance:
+
+- A fixture query does not return `_meta/`, `.hermes/`, session exports, or
+  generated artifacts as ordinary Wiki knowledge.
+- Existing `Clippings/` and new `Sources/Originals/` receive equivalent policy.
+- Archive retrieval is available explicitly without polluting ordinary recall.
+
+### P1.4 Add truthful health
 
 - Report `available`, `degraded`, or `unavailable` plus component facts.
 - Keep dashboard read-only.
@@ -109,7 +134,7 @@ Acceptance:
   missing Wiki, and dashboard failure.
 - No health result claims semantic recall when only lexical recall works.
 
-### P1.4 Fix backup and uninstall
+### P1.5 Fix backup and uninstall
 
 - Make `backup_paths()` initialization-free.
 - Discover configured GBrain state rather than assuming `~/.gbrain`.
