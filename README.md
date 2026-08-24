@@ -5,8 +5,8 @@ A pluggable **memory provider for [Hermes Agent](https://hermes-agent.nousresear
 Think of it as Hindsight's auto-generated "knowledge pages" — except the knowledge base is a **human-curated, git-versioned markdown wiki** you own, with provenance and cross-links, rather than opaque auto-generated memories.
 
 > **Status: experimental; hardening in progress.** Release `0.3.2` is not yet a
-> safe drop-in replacement for the stock memory providers. Its provider contract,
-> path/config handling, GBrain ownership, concurrent writes, fallback, and backup
+> safe drop-in replacement for the stock memory providers. Semantic role mapping,
+> GBrain ownership, fallback, capture safety, and restore
 > behavior remain roadmap work. Do not enable it against canonical data until the
 > P0/P1 acceptance tests in the [reliability roadmap](docs/RELIABILITY-ROADMAP.md)
 > pass.
@@ -28,16 +28,18 @@ The stock Hermes memory providers (Honcho, Hindsight, Mem0, etc.) are single clo
 - **Designed for shared use across profiles/bots** — the target architecture uses
   one configured Wiki and one shared GBrain owner. Release `0.3.2` does not yet
   satisfy the shared-owner acceptance tests.
-- **Backup integration planned** — the hardened provider will discover the actual
-  configured Wiki/GBrain paths and verify representative restore. Release `0.3.2`
-  still assumes `~/.gbrain` and does not prove complete backup coverage.
+- **Backup integration in progress** — current unreleased hardening discovers the
+  configured Wiki and `GBRAIN_HOME/.gbrain` paths before initialization. A
+  representative restore is still required before complete backup coverage is
+  claimed, and Hermes skips external provider paths outside the user home.
 
 ## Requirements
 
 - Hermes Agent (any platform)
 - [gbrain](https://github.com/garrytan/gbrain) CLI — `bun install -g github:garrytan/gbrain`
-- A disposable development Wiki at `<HERMES_ROOT>/wiki` for release `0.3.2`;
-  custom-root support is not reliable until roadmap item P0.2 lands
+- A disposable development Wiki. Release `0.3.2` defaults to
+  `<HERMES_ROOT>/wiki`; current unreleased hardening supports `memory.wiki.root`
+  while semantic role mapping in roadmap item P0.2 remains open.
 - gbrain embeddings backend (e.g. `ZEROENTROPY_API_KEY`, or a local model)
 
 ## Install
@@ -61,18 +63,20 @@ The prototype is packaged as a Hermes memory plugin. Current and planned knobs:
 | Setting | Default | Purpose |
 |---|---|---|
 | `memory.provider` | — | must be `wiki` |
+| `memory.wiki.root` | `<HERMES_ROOT>/wiki` | canonical Wiki root |
 | `memory.wiki.wiki_context_cap` | `1200` | max chars of wiki recall injected per turn |
 | `HERMES_WIKI_CONTEXT_MAX_CHARS` | (unset) | env override for the same cap |
-| `WIKI_PATH` | `<HERMES_ROOT>/wiki` | intended compatibility override; release `0.3.2` does not consistently honor it during provider initialization |
+| `WIKI_PATH` | `<HERMES_ROOT>/wiki` | compatibility override; `memory.wiki.root` takes precedence |
 
 Per-model context caps live in `wiki_client.py` (`MODEL_CONTEXT_CAP_CHARS`) — tight windows for `:free` tiers, default 3000 chars otherwise.
 
 ## How it works
 
 - `WikiClient` wraps a **persistent `gbrain serve` child** over JSON-RPC/stdio — pays the ~6.5s DB init once per process, then answers warm (`search` ~5.6s, `think` ~0.2s). Falls back to one-shot CLI calls if the server dies.
-- The prototype exposes methods shaped like the Hermes memory-provider lifecycle,
-  but release `0.3.2` does not subclass the current `MemoryProvider` ABC. Direct
-  provider-contract compatibility is roadmap item P0.1.
+- `WikiMemoryProvider` subclasses the current Hermes `MemoryProvider` ABC.
+- `WikiFileClient` confines paths to the Wiki root and uses locked atomic writes.
+- The provider and dashboard use matching precedence: `memory.wiki.root`, then
+  `WIKI_PATH`, then the shared Hermes root.
 - gbrain tools (`search`, `think`) are exposed to the agent via the native gbrain MCP server, not this plugin.
 
 ## Files

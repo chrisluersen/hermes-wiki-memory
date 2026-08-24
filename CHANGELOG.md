@@ -3,6 +3,43 @@
 All notable changes to **hermes-wiki-memory** are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Behavioral pytest coverage for the Hermes provider contract, Wiki-root
+  precedence, pre-initialization backup discovery, manifest routing, path
+  containment, atomic replacement, and concurrent appends.
+- CI now runs the behavioral suite in addition to compilation and manifest
+  checks.
+
+### Fixed
+- `WikiMemoryProvider` now subclasses Hermes's current `MemoryProvider` ABC.
+- Matching call-time Wiki-root resolution now applies
+  `memory.wiki.root` → `WIKI_PATH` → `<HERMES_ROOT>/wiki` precedence during
+  provider initialization, dashboard status, and backup discovery.
+- `hermes memory setup` and the dashboard can now discover and persist the
+  supported Wiki root and recall-budget settings.
+- `backup_paths()` works before initialization and honors GBrain's
+  `GBRAIN_HOME/<.gbrain>` convention.
+- Provider shutdown now closes and releases its process-local GBrain client.
+- Wiki reads/writes reject absolute, traversal, reserved-device, alternate-data-
+  stream, non-Markdown, and resolved parent-link escapes.
+- Wiki writes now use per-page locking, same-directory temporary files,
+  flush/fsync, and atomic replacement; concurrent appends re-read under lock.
+- Lock identities are lexical, case-normalized, and independent of target
+  existence; Windows extended-path aliases and existing on-disk casing are
+  normalized under lock, transient replace sharing violations are retried, and
+  lock artifacts live outside the Wiki.
+- Plugin manifest now declares the exclusive memory-provider kind.
+
+### Remaining limitations
+- GBrain ownership is still process-local; do not enable multi-profile PGLite
+  use until one shared owner is implemented.
+- Lexical fallback, semantic role mapping, capture idempotency/redaction,
+  strict frontmatter handling, and representative restore remain roadmap work.
+- Hermes backup archives external provider paths only when they are under the
+  user home; other configured roots require a separate verified backup.
+
 ## [0.3.2] - 2026-08-23
 
 ### Added
