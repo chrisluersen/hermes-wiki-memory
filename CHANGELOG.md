@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-24
+
 ### Added
 - Shared-owner GBrain integration through Hermes's public tool registry and
   GBrain's `recall` verb. The provider no longer starts, respawns, kills, or
@@ -51,12 +53,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Remaining limitations
 - The operator's live GBrain MCP entry has not been changed; semantic prefetch
   stays disabled until exact source binding and a safe timeout are approved.
-- A representative private-Wiki restore plus isolated keyed GBrain rebuild and
-  semantic query remain required before production/release claims.
+- A representative private-Wiki restore remains required before canonical-
+  profile activation. An isolated keyed GBrain canary remains required before
+  semantic activation. A full private-Wiki semantic rebuild is not a release prerequisite.
 - Explicit Windows reparse-point coverage remains open; replacement writes now
   support prior-fingerprint conflict detection under the page lock.
 - Hermes backup archives external provider paths only when they are under the
   user home; other configured roots require a separate verified backup.
+
+### Validation
+- PR #5 was squash-merged as commit
+  `1027f727a36f2a71c60fc7398a29c397bc1243a5`; Ubuntu and Windows CI passed.
+- The disposable lexical-only activation passed against the exact merged
+  commit in an isolated Hermes profile and synthetic Wiki, including bounded
+  recall, exclusions, redacted byte-idempotent capture, dashboard health,
+  backup declaration, rebuild manifest, reload, and cleanup.
+- Canonical-profile activation, live GBrain configuration, semantic indexing,
+  tag creation, and GitHub Release publication were not performed by that test.
 
 ## [0.3.2] - 2026-08-23
 
@@ -116,7 +129,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-[Unreleased]: https://github.com/chrisluersen/hermes-wiki-memory/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/chrisluersen/hermes-wiki-memory/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/chrisluersen/hermes-wiki-memory/releases/tag/v0.4.0
 [0.3.2]: https://github.com/chrisluersen/hermes-wiki-memory/releases/tag/v0.3.2
 [0.3.1]: https://github.com/chrisluersen/hermes-wiki-memory/releases/tag/v0.3.1
 [0.3.0]: https://github.com/chrisluersen/hermes-wiki-memory/releases/tag/v0.3.0

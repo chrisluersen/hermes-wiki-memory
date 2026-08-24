@@ -12,8 +12,11 @@ Hermes Wiki Memory connects three systems with distinct responsibilities:
 
 This is **not a rewrite or fork of Hermes memory**. It implements Hermes's existing provider contract. It is also **more than a thin GBrain wrapper**: it owns Wiki configuration, bounded lexical fallback, retrieval policy, contained atomic writes, immutable capture events, backup declarations, recovery evidence, and dashboard health.
 
-> **Status: experimental candidate `0.4.0`; not released or production-enabled.**
-> The local candidate passes behavioral, concurrency, restore, and synthetic recall tests. Live semantic activation and a representative private-Wiki restore/rebuild drill still require explicit approval. Do not enable it against canonical data solely because the source tree is green.
+> **Status: experimental `0.4.0` release preparation; merged to `master`, not
+> yet tagged, and not production-enabled.** The disposable lexical-only
+> activation passed against the exact merged commit in an isolated Hermes
+> profile and synthetic Wiki. Canonical-profile and semantic activation remain
+> separate approval-gated operations.
 
 ## Current behavior
 
@@ -144,9 +147,12 @@ Embedding coverage remains `unknown` unless the shared GBrain owner proves it. T
 - **Temporary restore verification:** tests compare bytes/tree digest, run `git fsck --strict`, and prove lexical recall/exclusion behavior.
 - **Data-preserving removal:** plugin-code removal is idempotent and retains Wiki/data paths. Hermes full uninstall remains a separate destructive action requiring verified backup.
 
-A real private-Wiki restore plus isolated GBrain rebuild and semantic query is still required before production/release claims.
+A representative private-Wiki restore remains required before canonical-profile
+activation. A fresh isolated GBrain canary remains required before semantic
+activation. Neither is a prerequisite for publishing an explicitly experimental,
+lexical-capable `0.4.0` release.
 
-## Verification in the current local candidate
+## Verification on merged `master`
 
 The repository includes:
 
@@ -186,16 +192,30 @@ CONTRIBUTING.md         product invariants and development workflow
 
 ## Remaining gates
 
-Before production enablement or a formal release:
+Before publishing `v0.4.0`:
 
-1. Approve and apply exact live GBrain MCP source binding plus a ≤7-second timeout.
-2. Run a disposable installation against a synthetic Wiki and restart Hermes surfaces.
-3. Run a representative private-Wiki backup/restore in an isolated location.
-4. Rebuild a fresh isolated GBrain index with approved credentials/model/dimensions and verify semantic recall.
-5. Add explicit Windows reparse-point coverage where the CI runner permits it.
-6. Publish through reviewed PR/CI, then separately approve tag and GitHub Release creation.
+1. Merge the release-documentation update through reviewed PR/CI.
+2. Separately approve the exact tag and GitHub Release payload.
 
-Live Wiki migration, embedding-schema changes, active-store reinitialization/deletion, and full Hermes uninstall are not authorized by this repository candidate.
+Before canonical lexical activation:
+
+1. Create and verify a recoverable Wiki backup outside destructive profile scope.
+2. Review the exact existing-folder role mapping and rollback procedure.
+3. Enable lexical-only first and verify capture/recall against canonical data.
+
+Before semantic activation:
+
+1. Build a fresh isolated GBrain canary with approved model, dimensions, and
+   credential reference.
+2. Verify semantic recall on synthetic or explicitly approved non-sensitive
+   Markdown.
+3. Separately approve the exact live MCP source binding and ≤7-second timeout.
+
+Explicit Windows reparse-point coverage remains desirable where the CI runner
+permits it, but the documented threat model does not claim adversarial
+post-check junction-race protection. Live Wiki migration, embedding-schema
+changes, active-store reinitialization/deletion, and full Hermes uninstall are
+not authorized by release publication.
 
 ## License
 

@@ -1,6 +1,8 @@
-# Setup — Hermes Wiki Memory candidate 0.4.0
+# Setup — Hermes Wiki Memory 0.4.0
 
-This guide is for isolated development and approval-gated activation. The candidate is not released or enabled against canonical data by this document.
+This guide covers reviewed `0.4.0` code and approval-gated activation. Release
+publication does not authorize canonical-profile activation, live GBrain
+configuration, or Wiki migration.
 
 ## Architecture
 
@@ -21,18 +23,18 @@ The provider never starts or stops GBrain and never falls back to one-shot GBrai
 - For semantic recall only: a configured shared GBrain MCP server exposing the `verbs` surface and `recall`.
 - Approved embedding credentials/model belong to GBrain, not this repository.
 
-## 1. Validate locally; install only a reviewed commit
+## 1. Validate source; install only a reviewed commit
 
-The unreleased candidate in a working tree is not installed by the
-`owner/repo` command below. Validate local source without enabling it:
+The `owner/repo` command installs repository state, not uncommitted working-tree
+bytes. Validate source without enabling it:
 
 ```bash
 python tests/run.py
 hermes plugins doctor --ci C:/path/to/hermes-wiki-memory
 ```
 
-After a reviewed commit is published, create and select a disposable profile,
-then install that exact 40-character commit **disabled**:
+Create and select a disposable profile, then install an exact reviewed
+40-character commit **disabled**:
 
 ```bash
 hermes profile create wiki-test --no-skills
@@ -226,14 +228,26 @@ CI runs the behavioral suite on Ubuntu and Windows. A symlink test may skip on W
 
 ## 10. Production gates
 
-Production use requires separate approval for:
+Completed release evidence:
 
-- exact live GBrain MCP source/timeout configuration;
-- disposable installation/restart testing;
+- Ubuntu and Windows behavioral CI passed on merged `master`;
+- real Hermes loading and plugin-doctor checks passed;
+- disposable lexical-only activation passed twice in separate real-Hermes
+  processes against a synthetic Wiki; and
+- the disposable profile, plugin, and fixture were removed afterward.
+
+Production use still requires separate approval for:
+
 - representative private-Wiki restore;
-- isolated semantic rebuild with approved embedding settings;
-- release tag/GitHub Release; and
 - canonical-profile enablement.
+
+Semantic use additionally requires separate approval for:
+
+- a fresh isolated GBrain canary with approved embedding settings; and
+- exact live GBrain MCP source/timeout configuration.
+
+Tag creation and GitHub Release publication are separate external effects.
+Release publication does not authorize canonical-profile activation.
 
 Do not bundle live Wiki migration, GBrain schema changes, active-store reinitialization, or full Hermes uninstall with plugin activation.
 

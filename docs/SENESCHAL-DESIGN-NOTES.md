@@ -7,10 +7,11 @@ experimental `chrisluersen/seneschal` project before that repository is archived
 It is a design input, not a dependency, governance layer, or authorization
 system.
 
-> **Implementation status:** Candidate `0.4.0` implements the bounded core of
-> these principles locally. Live semantic activation, representative private-
-> Wiki restore/rebuild evidence and Windows reparse coverage remain gated; see
-> the reliability roadmap.
+> **Implementation status:** Version `0.4.0` is merged to `master`, and its
+> disposable lexical-only activation passed. Representative private-Wiki
+> restore evidence remains gated before canonical activation; an isolated
+> semantic canary remains gated before semantic activation. See the reliability
+> roadmap.
 
 - Seneschal source reviewed at commit:
   `da083149399a6e840b5c74f0c33f499a720b0def`
@@ -45,7 +46,7 @@ state.
 
 ### 2. Adopt the existing Wiki
 
-The candidate maps semantic roles onto an existing layout rather than
+The provider maps semantic roles onto an existing layout rather than
 force a new folder tree or create a parallel taxonomy. The simple new-Wiki
 target is `Inbox/`, `Projects/`, `Knowledge/`, `Sources/Originals/`,
 `Sources/Notes/`, `Archive/`, and `_meta/`; the roadmap's `adopt-existing`
@@ -101,7 +102,8 @@ contents, authorization material, and unnecessary absolute paths.
 The provider discovers its configured Wiki without initialization. Canonical
 Markdown is the required backup; derived GBrain state is marked for rebuild in a
 secret-free manifest. A temporary synthetic restore verifies bytes, Git integrity,
-and lexical retrieval. A private-Wiki restore plus semantic rebuild remains gated.
+and lexical retrieval. A private-Wiki restore and an isolated semantic canary
+remain separate activation gates, not experimental-release prerequisites.
 
 ### 9. Plugin-code removal preserves user data
 
