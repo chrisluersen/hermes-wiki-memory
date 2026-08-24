@@ -6,22 +6,53 @@ Implements the MemoryProvider ABC for Hermes Agent.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from pathlib import Path
-from hermes_constants import get_default_hermes_root, get_hermes_home
+from agent.memory_provider import MemoryProvider
 from typing import Any, Dict, List, Optional
 
 from .wiki_client import (
     WikiClient,
     _truncate_block,
+    resolve_wiki_path,
     wiki_context_cap,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class WikiMemoryProvider:
+def _load_provider_config(explicit: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Read ``memory.wiki`` without mutating Hermes's cached config."""
+    configured: Dict[str, Any] = {}
+    try:
+        from hermes_cli.config import load_config_readonly
+
+        config = load_config_readonly() or {}
+        memory = config.get("memory", {}) if isinstance(config, dict) else {}
+        wiki = memory.get("wiki", {}) if isinstance(memory, dict) else {}
+        if isinstance(wiki, dict):
+            configured.update(wiki)
+    except Exception as exc:
+        logger.debug("Wiki provider config unavailable: %s", exc)
+    if explicit:
+        configured.update(explicit)
+    return configured
+
+
+def _resolve_gbrain_dir() -> Optional[Path]:
+    """Mirror GBrain's absolute-parent/no-``..`` ``GBRAIN_HOME`` contract."""
+    parent = os.environ.get("GBRAIN_HOME", "").strip()
+    if not parent:
+        return (Path.home() / ".gbrain").resolve()
+    raw = Path(parent).expanduser()
+    if not raw.is_absolute() or ".." in raw.parts:
+        return None
+    return (raw / ".gbrain").resolve()
+
+
+class WikiMemoryProvider(MemoryProvider):
     """Memory provider backed by the agent wiki + gbrain."""
 
     name = "wiki"
@@ -38,8 +69,11 @@ class WikiMemoryProvider:
     def is_available(self) -> bool:
         """Check if wiki and gbrain are accessible."""
         try:
-            client = WikiClient()
-            return client.is_available()
+            client = WikiClient(resolve_wiki_path(_load_provider_config()))
+            try:
+                return client.is_available()
+            finally:
+                client.gbrain.close()
         except Exception as e:
             logger.debug("Wiki provider unavailable: %s", e)
             return False
@@ -55,10 +89,10 @@ class WikiMemoryProvider:
             self._initialized = True
             return
 
-        # Shared wiki brain at the Hermes ROOT (see wiki_client.WIKI_PATH)
-        wiki_path = str(Path(get_default_hermes_root()) / "wiki")
-        self._client = WikiClient(Path(wiki_path))
-        self._provider_config = kwargs.get("provider_config", {}) or {}
+        self._provider_config = _load_provider_config(
+            kwargs.get("provider_config", {}) or {}
+        )
+        self._client = WikiClient(resolve_wiki_path(self._provider_config))
 
         if not self._client.is_available():
             logger.warning("Wiki provider initialized but wiki/gbrain not fully available")
@@ -111,12 +145,58 @@ class WikiMemoryProvider:
         """gbrain tools are provided by the native gbrain MCP server instead."""
         return []
 
+    def get_config_schema(self) -> List[Dict[str, Any]]:
+        """Settings rendered by ``hermes memory setup`` and the dashboard."""
+        return [
+            {
+                "key": "root",
+                "description": "Canonical Wiki root (blank uses WIKI_PATH or the Hermes root)",
+                "default": "",
+            },
+            {
+                "key": "wiki_context_cap",
+                "description": "Maximum Wiki recall characters injected per turn",
+                "default": 1200,
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 20000,
+                "step": 100,
+            },
+        ]
+
+    def save_config(self, values: Dict[str, Any], hermes_home: str) -> None:
+        """Persist supported settings under ``memory.wiki`` in config.yaml."""
+        del hermes_home  # Hermes's config API resolves the active profile safely.
+        from hermes_cli.config import (
+            atomic_config_write,
+            get_config_path,
+            read_user_config_raw,
+        )
+
+        root = str(values.get("root", "")).strip()
+        try:
+            cap = int(values.get("wiki_context_cap", 1200))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("wiki_context_cap must be an integer") from exc
+        if not 200 <= cap <= 20000:
+            raise ValueError("wiki_context_cap must be between 200 and 20000")
+
+        config = read_user_config_raw() or {}
+        memory = config.setdefault("memory", {})
+        if not isinstance(memory, dict):
+            raise ValueError("memory config must be a mapping")
+        memory["wiki"] = {"root": root, "wiki_context_cap": cap}
+        atomic_config_write(get_config_path(), config, sort_keys=False)
+
     def handle_tool_call(self, tool_name: str, args: Dict[str, Any], **kwargs) -> str:
         """gbrain tools are provided by the native gbrain MCP server instead."""
         return f"Unknown tool: {tool_name}"
 
     def shutdown(self) -> None:
         """Clean shutdown."""
+        if self._client:
+            self._client.gbrain.close()
+            self._client = None
         self._initialized = False
         logger.debug("Wiki memory provider shutdown")
 
@@ -246,10 +326,12 @@ class WikiMemoryProvider:
     def backup_paths(self) -> List[str]:
         """Extra paths for `hermes backup`."""
         paths = []
-        if self._client:
-            paths.append(str(self._client.wiki))
-        gbrain_dir = Path.home() / ".gbrain"
-        if gbrain_dir.exists():
+        provider_config = self._provider_config or _load_provider_config()
+        wiki = self._client.wiki if self._client else resolve_wiki_path(provider_config)
+        if wiki.exists():
+            paths.append(str(wiki))
+        gbrain_dir = _resolve_gbrain_dir()
+        if gbrain_dir is not None and gbrain_dir.exists():
             paths.append(str(gbrain_dir))
         return paths
 

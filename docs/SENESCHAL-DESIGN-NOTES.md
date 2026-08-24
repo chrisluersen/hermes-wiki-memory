@@ -23,8 +23,8 @@ system.
 ## Product boundary
 
 Hermes Wiki Memory is intended to remain a small, plug-and-play Hermes memory
-provider after direct `MemoryProvider` compatibility and the P0/P1 acceptance
-tests are implemented.
+provider. Direct `MemoryProvider` compatibility is now implemented; the
+remaining P0/P1 acceptance tests still gate production readiness.
 It is not an agent-estate manager, policy engine, workflow system, task store,
 secrets manager, or replacement for native Hermes and Git state.
 

@@ -41,6 +41,7 @@ progress.
 ```bash
 hermes plugins install chrisluersen/hermes-wiki-memory --enable
 hermes config set memory.provider wiki
+hermes config set memory.wiki.root C:/path/to/wiki       # optional
 hermes config set memory.wiki.wiki_context_cap 1200   # optional recall budget
 hermes gateway restart
 hermes memory status     # Provider: wiki / Plugin: installed / Status: available
@@ -98,9 +99,9 @@ exact on-disk spelling and case. See the
 retrieval, and no-big-bang migration rules.
 
 Release `0.3.2` effectively initializes the provider at
-`<HERMES_ROOT>/wiki`. Although the file client resolves `WIKI_PATH`, provider
-initialization currently bypasses that override. Do not rely on a custom path
-until P0.2 centralizes path resolution and its tests pass.
+`<HERMES_ROOT>/wiki`. Current unreleased hardening centralizes path resolution
+with `memory.wiki.root` → `WIKI_PATH` → default precedence; do not treat it as
+released behavior until a subsequent tagged release passes the remaining gates.
 
 ## 4. Set up maintenance
 
@@ -111,9 +112,12 @@ GBrain version, including sync, stale embedding/extraction work, health, backup,
 and representative restore.
 
 Back up canonical data with a separately verified procedure. Do not assume
-release `0.3.2` discovers the actual GBrain store: its `backup_paths()` still
-assumes `~/.gbrain`. The roadmap requires configured-path discovery and a
-representative restore drill before backup coverage is claimed.
+release `0.3.2` discovers the actual GBrain store: its `backup_paths()` assumes
+`~/.gbrain`. Current unreleased hardening adds pre-init Wiki discovery and
+`GBRAIN_HOME/.gbrain` support, but representative restore remains required
+before backup coverage is claimed. Hermes archives external provider paths only
+when they are under the user home; configure and verify a separate backup for
+roots on other drives or outside that boundary.
 
 ## 5. Verify
 

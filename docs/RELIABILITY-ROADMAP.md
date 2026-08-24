@@ -29,6 +29,10 @@ Acceptance:
 - Memory-manager lifecycle tests cover initialize, prefetch, session switch,
   session end, memory-write hook, delegation hook, and shutdown.
 
+Status: provider subclassing and provider-level initialization/shutdown unit
+tests are implemented; memory-manager orchestration and the remaining lifecycle
+hooks still need behavioral coverage.
+
 ### P0.2 Resolve one Wiki configuration everywhere
 
 - Introduce one immutable resolved configuration object.
@@ -53,6 +57,10 @@ Acceptance:
 - A new-Wiki fixture uses the small role-based layout without requiring
   `entities/`, `concepts/`, `comparisons/`, `queries/`, `work/`, `personal/`,
   `sessions/`, or `plans/` directories.
+
+Status: matching root precedence is implemented across provider initialization,
+dashboard status, backup discovery, and setup persistence. One immutable shared
+configuration object, semantic-role mapping, and `adopt-existing` remain open.
 
 ### P0.3 Use one GBrain owner
 
@@ -80,6 +88,10 @@ Acceptance:
 - Injected interruption leaves the prior file intact.
 - Absolute, traversal, reserved-name, and out-of-root paths fail safely.
 - No temporary or lock file leaks remain after success or failure.
+
+Status: containment, reserved-name/ADS rejection, atomic replace and concurrent
+append tests are implemented. Prior-fingerprint conflict detection and explicit
+Windows reparse-point coverage remain open.
 
 ## P1 — Durable behavior
 

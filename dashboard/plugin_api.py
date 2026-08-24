@@ -31,6 +31,7 @@ disclosure of wiki page counts, commit subjects, and plugin config values.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Optional
@@ -64,12 +65,32 @@ def _hermes_root() -> Path:
 
 
 def _wiki_root() -> Path:
-    """The wiki repo. Shared brain lives at the Hermes ROOT, not the profile."""
-    return _hermes_root() / "wiki"
+    """Resolve the same Wiki root precedence as the memory provider."""
+    try:
+        from hermes_cli.config import load_config_readonly
+
+        config = load_config_readonly() or {}
+        memory = config.get("memory", {}) if isinstance(config, dict) else {}
+        wiki = memory.get("wiki", {}) if isinstance(memory, dict) else {}
+        configured = str(wiki.get("root", "")).strip() if isinstance(wiki, dict) else ""
+        if configured:
+            return Path(configured).expanduser().resolve()
+    except Exception as exc:
+        log.debug("wiki dashboard: config unavailable: %s", exc)
+    env = os.environ.get("WIKI_PATH", "").strip()
+    if env:
+        return Path(env).expanduser().resolve()
+    return (_hermes_root() / "wiki").resolve()
 
 
-def _gbrain_dir() -> Path:
-    return Path.home() / ".gbrain"
+def _gbrain_dir() -> Optional[Path]:
+    parent = os.environ.get("GBRAIN_HOME", "").strip()
+    if not parent:
+        return (Path.home() / ".gbrain").resolve()
+    raw = Path(parent).expanduser()
+    if not raw.is_absolute() or ".." in raw.parts:
+        return None
+    return (raw / ".gbrain").resolve()
 
 
 def _git(*args: str, cwd: Path) -> Optional[str]:
@@ -100,13 +121,13 @@ def _count_md(root: Path) -> int:
 def _gbrain_available() -> dict[str, Any]:
     """Probe gbrain WITHOUT running doctor (advisory-lock hang trap)."""
     gb = _gbrain_dir()
-    cfg = gb / "config.json"
+    cfg = gb / "config.json" if gb is not None else None
     bin_name = "gbrain" if _platform_is_posix() else "gbrain.cmd"
     on_path = _which(bin_name) or _which("gbrain")
     return {
         "binary_on_path": bool(on_path),
-        "config_exists": cfg.exists(),
-        "config_path": str(cfg),
+        "config_exists": bool(cfg and cfg.exists()),
+        "config_path": str(cfg) if cfg else "",
     }
 
 
@@ -161,6 +182,7 @@ def _last_commit(wiki: Path) -> Optional[dict[str, Any]]:
 @router.get("/activity")
 def get_activity(limit: int = 15) -> dict[str, Any]:
     """Recent wiki commits — the durable activity log of the brain."""
+    limit = max(1, min(int(limit), 100))
     wiki = _wiki_root()
     out = _git(
         "log", f"-{limit}", "--format=%h%x09%s%x09%aI",

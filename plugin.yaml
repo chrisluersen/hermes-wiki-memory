@@ -1,9 +1,11 @@
+manifest_version: 1
 name: wiki
 title: "Wiki Memory Provider"
 description: "Experimental local-first Wiki memory prototype; hardening required before canonical or multi-profile use"
 version: "0.3.2"
 author: "chrisluersen"
 license: "MIT"
+kind: "exclusive"
 category: "memory"
 provides_dashboard: true
 requires:

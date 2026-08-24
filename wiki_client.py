@@ -9,11 +9,14 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
+import hashlib
 from dataclasses import dataclass
 import json
-from pathlib import Path
+from contextlib import contextmanager
+from pathlib import Path, PureWindowsPath
 from typing import Any, Optional
 from queue import Queue, Empty
 
@@ -25,14 +28,23 @@ logger = logging.getLogger(__name__)
 # profile/bot in the fleet queries and writes the SAME wiki. get_hermes_home()
 # returns profiles/<name> under a profile, which has no wiki/; the root does.
 # WIKI_PATH env (e.g. in $HERMES_HOME/.env) overrides the default.
-def _resolve_wiki_path() -> Path:
+def resolve_wiki_path(config: Optional[dict] = None) -> Path:
+    """Resolve one canonical Wiki root for provider and file operations.
+
+    Provider config wins over the compatibility environment variable; both
+    are resolved at call time so setup/tests can change them after import.
+    """
+    if config:
+        configured = str(config.get("root", "")).strip()
+        if configured:
+            return Path(configured).expanduser().resolve()
     env = os.environ.get("WIKI_PATH", "").strip()
     if env:
-        return Path(env)
-    return Path(str(get_default_hermes_root() / "wiki"))
+        return Path(env).expanduser().resolve()
+    return (get_default_hermes_root() / "wiki").resolve()
 
 
-WIKI_PATH = _resolve_wiki_path()
+WIKI_PATH = resolve_wiki_path()
 
 # gbrain reads these with env precedence; the Hermes .env lists them as ${VAR}
 # placeholders (Bitwarden-resolved only at Hermes runtime). A child inheriting
@@ -223,9 +235,14 @@ class GBrainClient:
             except Exception:
                 try:
                     proc.kill()
+                    proc.wait(timeout=5)
                 except Exception:
                     pass
         self._serve_ok = False
+
+    def close(self) -> None:
+        """Release the process-local GBrain client resources."""
+        self._stop_server()
 
     def _read_loop(self) -> None:
         proc = self._proc
@@ -373,11 +390,174 @@ class GBrainClient:
 class WikiFileClient:
     """File-level wiki operations (read, write, upsert, append)."""
 
+    _thread_locks: dict[str, threading.Lock] = {}
+    _thread_locks_guard = threading.Lock()
+    _windows_reserved_names = {
+        "CON", "PRN", "AUX", "NUL",
+        *(f"COM{i}" for i in range(1, 10)),
+        *(f"LPT{i}" for i in range(1, 10)),
+    }
+
     def __init__(self, wiki: Path = WIKI_PATH):
-        self.wiki = wiki
+        self.wiki = Path(wiki).expanduser().resolve()
+        wiki_digest = hashlib.sha256(self._lock_identity(self.wiki).encode("utf-8")).hexdigest()
+        self._lock_root = Path(tempfile.gettempdir()) / "hermes-wiki-memory-locks" / wiki_digest
+
+    @staticmethod
+    def _normalized_path_text(value: str) -> str:
+        """Normalize Windows extended prefixes and filesystem case semantics."""
+        if value.startswith("\\\\?\\UNC\\"):
+            value = "\\\\" + value[8:]
+        elif value.startswith("\\\\?\\"):
+            value = value[4:]
+        return os.path.normcase(value)
+
+    @classmethod
+    def _lock_identity(cls, target: Path) -> str:
+        """Return a stable lexical identity independent of target existence."""
+        return cls._normalized_path_text(os.path.abspath(str(target)))
+
+    def _resolve_page_path(self, path: str) -> Path:
+        """Return a contained page path, rejecting absolute and escape paths."""
+        raw = str(path).strip()
+        windows_path = PureWindowsPath(raw)
+        normalized = raw.replace("\\", "/")
+        parts = [part for part in normalized.split("/") if part]
+        unsafe_part = any(
+            part in {".", ".."}
+            or part.endswith((" ", "."))
+            or any(char in part for char in '<>:"|?*\x00')
+            or part.rstrip(" .").split(".", 1)[0].upper() in self._windows_reserved_names
+            for part in parts
+        )
+        invalid = (
+            not raw
+            or not parts
+            or Path(raw).is_absolute()
+            or windows_path.is_absolute()
+            or bool(windows_path.drive)
+            or unsafe_part
+            or not normalized.lower().endswith(".md")
+        )
+        if invalid:
+            raise ValueError("page path must be a safe Markdown path inside the Wiki root")
+        candidate = self.wiki / normalized
+        resolved_candidate = candidate.resolve()
+        resolved_root = self.wiki.resolve()
+        candidate_text = self._normalized_path_text(str(resolved_candidate))
+        root_text = self._normalized_path_text(str(resolved_root))
+        try:
+            contained = os.path.commonpath([root_text, candidate_text]) == root_text
+        except ValueError:
+            contained = False
+        if not contained:
+            raise ValueError(
+                "page path must be a safe Markdown path inside the Wiki root"
+            )
+        return candidate
+
+    @classmethod
+    def _thread_lock_for(cls, target: Path) -> threading.Lock:
+        key = cls._lock_identity(target)
+        with cls._thread_locks_guard:
+            return cls._thread_locks.setdefault(key, threading.Lock())
+
+    def _canonical_disk_path(self, target: Path) -> Path:
+        """Use existing Windows component casing after the shared lock is held."""
+        if os.name != "nt":
+            return target
+        relative = target.relative_to(self.wiki)
+        current = self.wiki
+        for part in relative.parts:
+            matched = None
+            if current.is_dir():
+                wanted = os.path.normcase(part)
+                try:
+                    matched = next(
+                        (child.name for child in current.iterdir()
+                         if os.path.normcase(child.name) == wanted),
+                        None,
+                    )
+                except OSError:
+                    matched = None
+            current = current / (matched or part)
+        return current
+
+    @contextmanager
+    def _page_lock(self, target: Path):
+        """Serialize page updates across threads and processes."""
+        with self._thread_lock_for(target):
+            self._lock_root.mkdir(parents=True, exist_ok=True)
+            digest = hashlib.sha256(self._lock_identity(target).encode("utf-8")).hexdigest()
+            lock_path = self._lock_root / f"{digest}.lock"
+            try:
+                with lock_path.open("xb") as initializer:
+                    initializer.write(b" ")
+                    initializer.flush()
+                    os.fsync(initializer.fileno())
+            except FileExistsError:
+                pass
+            handle = lock_path.open("r+b")
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    deadline = time.monotonic() + 30.0
+                    while True:
+                        try:
+                            handle.seek(0)
+                            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                            break
+                        except (OSError, PermissionError):
+                            if time.monotonic() >= deadline:
+                                raise TimeoutError(
+                                    f"timed out waiting for Wiki page lock: {target}"
+                                )
+                            time.sleep(0.05)
+                else:
+                    import fcntl
+
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                yield self._canonical_disk_path(target)
+            finally:
+                try:
+                    handle.seek(0)
+                    if os.name == "nt":
+                        import msvcrt
+
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                    else:
+                        import fcntl
+
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                finally:
+                    handle.close()
+
+    @staticmethod
+    def _atomic_write(target: Path, text: str) -> None:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temp = target.with_name(
+            f".{target.name}.{os.getpid()}-{threading.get_ident()}.tmp"
+        )
+        try:
+            with temp.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            deadline = time.monotonic() + 5.0
+            while True:
+                try:
+                    os.replace(temp, target)
+                    break
+                except PermissionError:
+                    if os.name != "nt" or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.05)
+        finally:
+            temp.unlink(missing_ok=True)
 
     def read_page(self, path: str) -> Optional[WikiPage]:
-        full = self.wiki / path
+        full = self._resolve_page_path(path)
         if not full.exists() or not full.is_file():
             return None
         text = full.read_text(encoding="utf-8")
@@ -393,10 +573,9 @@ class WikiFileClient:
         frontmatter: Optional[dict[str, Any]] = None,
     ) -> None:
         """Create or replace a wiki page with frontmatter."""
-        full = self.wiki / path
-        full.parent.mkdir(parents=True, exist_ok=True)
+        full = self._resolve_page_path(path)
 
-        fm = frontmatter or {}
+        fm = dict(frontmatter or {})
         fm.setdefault("title", title)
         fm.setdefault("created", time.strftime("%Y-%m-%d"))
         fm["updated"] = time.strftime("%Y-%m-%d")
@@ -404,7 +583,9 @@ class WikiFileClient:
         # Serialize frontmatter as YAML
         import yaml
         fm_text = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip()
-        full.write_text(f"---\n{fm_text}\n---\n\n{content}\n", encoding="utf-8")
+        rendered = f"---\n{fm_text}\n---\n\n{content}\n"
+        with self._page_lock(full) as locked_full:
+            self._atomic_write(locked_full, rendered)
 
     def append_to_page(
         self,
@@ -413,24 +594,25 @@ class WikiFileClient:
         frontmatter: Optional[dict[str, Any]] = None,
     ) -> None:
         """Append content to existing page, creating if needed."""
-        existing = self.read_page(path)
-        if existing:
-            new_content = existing.content.rstrip() + "\n\n" + content + "\n"
-            fm = {**existing.frontmatter, **(frontmatter or {})}
-            fm["updated"] = time.strftime("%Y-%m-%d")
-        else:
-            new_content = content + "\n"
-            fm = frontmatter or {}
-            fm.setdefault("title", Path(path).stem)
-            fm["created"] = time.strftime("%Y-%m-%d")
-            fm["updated"] = time.strftime("%Y-%m-%d")
+        full = self._resolve_page_path(path)
+        with self._page_lock(full) as locked_full:
+            # Re-read after acquiring the lock so concurrent appends compose.
+            if locked_full.exists() and locked_full.is_file():
+                text = locked_full.read_text(encoding="utf-8")
+                existing_fm, existing_content = self._parse_frontmatter(text)
+                new_content = existing_content.rstrip() + "\n\n" + content + "\n"
+                fm = {**existing_fm, **(frontmatter or {})}
+                fm["updated"] = time.strftime("%Y-%m-%d")
+            else:
+                new_content = content + "\n"
+                fm = dict(frontmatter or {})
+                fm.setdefault("title", Path(path).stem)
+                fm["created"] = time.strftime("%Y-%m-%d")
+                fm["updated"] = time.strftime("%Y-%m-%d")
 
-        full = self.wiki / path
-        full.parent.mkdir(parents=True, exist_ok=True)
-
-        import yaml
-        fm_text = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip()
-        full.write_text(f"---\n{fm_text}\n---\n\n{new_content}", encoding="utf-8")
+            import yaml
+            fm_text = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip()
+            self._atomic_write(locked_full, f"---\n{fm_text}\n---\n\n{new_content}")
 
     def _parse_frontmatter(self, text: str) -> tuple[dict, str]:
         if not text.startswith("---"):
