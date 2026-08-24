@@ -23,6 +23,11 @@ from hermes_constants import get_default_hermes_root
 
 logger = logging.getLogger(__name__)
 
+
+def _is_windows() -> bool:
+    """Platform seam for Windows-only locking/retry behavior."""
+    return os.name == "nt"
+
 # Shared wiki brain lives at the Hermes ROOT, not the profile home — so every
 # profile/bot in the fleet queries and writes the SAME wiki. get_hermes_home()
 # returns profiles/<name> under a profile, which has no wiki/; the root does.
@@ -472,7 +477,7 @@ class WikiFileClient:
 
     def _canonical_disk_path(self, target: Path) -> Path:
         """Use existing Windows component casing after the shared lock is held."""
-        if os.name != "nt":
+        if not _is_windows():
             return target
         relative = target.relative_to(self.wiki)
         current = self.wiki
@@ -534,11 +539,11 @@ class WikiFileClient:
                 except PermissionError:
                     if "handle" in locals() and not handle.closed:
                         handle.close()
-                    if os.name != "nt" or time.monotonic() >= deadline:
+                    if not _is_windows() or time.monotonic() >= deadline:
                         raise
                     time.sleep(0.05)
             try:
-                if os.name == "nt":
+                if _is_windows():
                     import msvcrt
 
                     acquired = False
@@ -564,7 +569,7 @@ class WikiFileClient:
             finally:
                 try:
                     handle.seek(0)
-                    if os.name == "nt":
+                    if _is_windows():
                         import msvcrt
 
                         if acquired:
@@ -593,7 +598,7 @@ class WikiFileClient:
                     os.replace(temp, target)
                     break
                 except PermissionError:
-                    if os.name != "nt" or time.monotonic() >= deadline:
+                    if not _is_windows() or time.monotonic() >= deadline:
                         raise
                     time.sleep(0.05)
         finally:

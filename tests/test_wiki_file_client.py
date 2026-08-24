@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import threading
+import pathlib
 from pathlib import Path
 
 import pytest
@@ -216,13 +217,34 @@ def test_lock_file_initialization_retries_transient_windows_denial(
             raise PermissionError("transient lock-file initialization denial")
         return real_open(path, mode, *args, **kwargs)
 
+    class FakeMsvcrt:
+        LK_NBLCK = 1
+        LK_UNLCK = 2
+
+        @staticmethod
+        def locking(fd, mode, count):
+            return None
+
     monkeypatch.setattr(wiki_module.Path, "open", flaky_open)
-    monkeypatch.setattr(wiki_module.os, "name", "nt")
+    monkeypatch.setitem(__import__("sys").modules, "msvcrt", FakeMsvcrt)
+    monkeypatch.setattr(wiki_module, "_is_windows", lambda: True)
 
     client.append_to_page("Knowledge/log.md", "entry")
 
     assert attempts == 2
     assert (wiki / "Knowledge" / "log.md").read_text(encoding="utf-8").count("entry") == 1
+
+
+def test_windows_simulation_does_not_mutate_process_global_os_name(
+    wiki_module, monkeypatch, tmp_path
+):
+    original_os_name = os.name
+    original_path_type = type(pathlib.Path())
+    monkeypatch.setattr(wiki_module, "_is_windows", lambda: True)
+
+    assert wiki_module._is_windows() is True
+    assert os.name == original_os_name
+    assert type(pathlib.Path(tmp_path)) is original_path_type
 
 
 def test_lock_file_initialization_repairs_existing_empty_lock(
@@ -250,7 +272,7 @@ def test_lock_file_initialization_repairs_existing_empty_lock(
                 observed_sizes.append(lock_path.stat().st_size)
 
     monkeypatch.setitem(__import__("sys").modules, "msvcrt", FakeMsvcrt)
-    monkeypatch.setattr(wiki_module.os, "name", "nt")
+    monkeypatch.setattr(wiki_module, "_is_windows", lambda: True)
 
     client.append_to_page("Knowledge/log.md", "entry")
 
@@ -275,7 +297,7 @@ def test_lock_timeout_is_not_masked_by_unlock_error(wiki_module, monkeypatch, tm
 
     ticks = iter((0.0, 31.0))
     monkeypatch.setitem(__import__("sys").modules, "msvcrt", FakeMsvcrt)
-    monkeypatch.setattr(wiki_module.os, "name", "nt")
+    monkeypatch.setattr(wiki_module, "_is_windows", lambda: True)
     monkeypatch.setattr(wiki_module.time, "monotonic", lambda: next(ticks))
 
     with pytest.raises(TimeoutError, match="timed out waiting"):
