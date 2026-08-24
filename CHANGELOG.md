@@ -23,6 +23,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `<HERMES_ROOT>/wiki`. Matches the `SETUP.md` documentation, which previously
   claimed the override without the code backing it.
 
+### Known limitation
+- Release `0.3.1` added `WIKI_PATH` resolution to `wiki_client.py`, but provider
+  initialization still reconstructs `<HERMES_ROOT>/wiki` and bypasses the
+  override. Custom-root support remains incomplete pending roadmap item P0.2.
+
 ### Fixed
 - `SETUP.md` install command used a `github:` prefix that mangles the URL
   (`github.com/github:chrisluersen/...`) and breaks install. Corrected to the
@@ -46,6 +51,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `dangerous` verdict that blocks install (`--force` cannot override).
   Prose now lives in the docs; skills are referenced by catalog name instead.
 - Install command corrected to `owner/repo` shorthand in `README.md`.
+
+### Documentation correction
+- The `0.3.0` notes above recorded the release's original claim. Current Hermes
+  ships `llm-wiki`, but does not provide catalog entries named
+  `gbrain-integration` or `wiki-maintenance`. GBrain onboarding and maintenance
+  must use GBrain's own documented surfaces until the hardened plugin provides
+  tested automation.
 
 ---
 
