@@ -53,9 +53,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Remaining limitations
 - The operator's live GBrain MCP entry has not been changed; semantic prefetch
   stays disabled until exact source binding and a safe timeout are approved.
-- A representative private-Wiki restore remains required before canonical-
-  profile activation. An isolated keyed GBrain canary remains required before
-  semantic activation. A full private-Wiki semantic rebuild is not a release prerequisite.
+- A representative canonical-Wiki restore, lexical-only canonical activation,
+  and isolated keyed GBrain canary have passed for the release. A later bounded
+  Notes evaluation improved semantic retrieval but missed its predeclared
+  production threshold, so production remains lexical-only. A full private-Wiki
+  semantic rebuild is not a release prerequisite.
 - Explicit Windows reparse-point coverage remains open; replacement writes now
   support prior-fingerprint conflict detection under the page lock.
 - Hermes backup archives external provider paths only when they are under the
@@ -68,8 +70,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   commit in an isolated Hermes profile and synthetic Wiki, including bounded
   recall, exclusions, redacted byte-idempotent capture, dashboard health,
   backup declaration, rebuild manifest, reload, and cleanup.
-- Canonical-profile activation, live GBrain configuration, semantic indexing,
-  tag creation, and GitHub Release publication were not performed by that test.
+- The `v0.4.0` tag and GitHub prerelease were published separately. Canonical
+  lexical-only activation and recovery were verified later; semantic indexing
+  remained derived evaluation evidence and was not attached to the live provider.
 
 ## [0.3.2] - 2026-08-23
 

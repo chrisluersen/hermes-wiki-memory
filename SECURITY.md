@@ -2,9 +2,8 @@
 
 ## Supported versions
 
-Hermes Wiki Memory is experimental. The `0.4.0` hardening is merged to current
-`master` but is not tagged at the time of this release-preparation update.
-Tagged `0.3.x` releases do not contain the hardening.
+Hermes Wiki Memory is experimental. The `0.4.0` hardening is published as a
+GitHub prerelease. Tagged `0.3.x` releases do not contain the hardening.
 
 ## Reporting a vulnerability
 

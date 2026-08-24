@@ -12,11 +12,13 @@ Hermes Wiki Memory connects three systems with distinct responsibilities:
 
 This is **not a rewrite or fork of Hermes memory**. It implements Hermes's existing provider contract. It is also **more than a thin GBrain wrapper**: it owns Wiki configuration, bounded lexical fallback, retrieval policy, contained atomic writes, immutable capture events, backup declarations, recovery evidence, and dashboard health.
 
-> **Status: experimental `0.4.0` release preparation; merged to `master`, not
-> yet tagged, and not production-enabled.** The disposable lexical-only
-> activation passed against the exact merged commit in an isolated Hermes
-> profile and synthetic Wiki. Canonical-profile and semantic activation remain
-> separate approval-gated operations.
+> **Status: experimental `0.4.0` prerelease; tagged and published.** The exact
+> released commit passed disposable lexical-only activation, a representative canonical-Wiki
+> backup/restore drill, and canonical-profile lexical-only activation. An
+> isolated keyed semantic canary also passed. A later bounded Notes evaluation
+> improved retrieval but missed its predeclared production threshold, so the
+> validated production posture remains lexical-only and semantic activation is
+> still a separate, unperformed operation.
 
 ## Current behavior
 
@@ -147,10 +149,12 @@ Embedding coverage remains `unknown` unless the shared GBrain owner proves it. T
 - **Temporary restore verification:** tests compare bytes/tree digest, run `git fsck --strict`, and prove lexical recall/exclusion behavior.
 - **Data-preserving removal:** plugin-code removal is idempotent and retains Wiki/data paths. Hermes full uninstall remains a separate destructive action requiring verified backup.
 
-A representative private-Wiki restore remains required before canonical-profile
-activation. A fresh isolated GBrain canary remains required before semantic
-activation. Neither is a prerequisite for publishing an explicitly experimental,
-lexical-capable `0.4.0` release.
+The representative canonical-Wiki restore and isolated keyed GBrain canary have
+been completed for the released commit. They prove recoverability and the
+optional semantic attachment path; they do not by themselves justify production
+semantic activation. A bounded derived-Notes evaluation improved retrieval but
+did not meet its predeclared acceptance threshold, so lexical-only remains the
+validated production posture.
 
 ## Verification on merged `master`
 
@@ -190,26 +194,25 @@ SECURITY.md             private-reporting and security-boundary guidance
 CONTRIBUTING.md         product invariants and development workflow
 ```
 
-## Remaining gates
+## Operational setup and remaining gates
 
-Before publishing `v0.4.0`:
+`v0.4.0` is published, and representative lexical-only activation is complete.
+For another Hermes installation, follow [SETUP.md](SETUP.md): install the exact
+published tag's peeled 40-character commit (or another reviewed full SHA)
+disabled, map the existing Wiki without moving content, verify a recoverable
+backup/restore, then enable lexical-only and inspect detailed health. Do not copy
+another installation's absolute paths, secrets, profile state, derived GBrain
+store, or source IDs.
 
-1. Merge the release-documentation update through reviewed PR/CI.
-2. Separately approve the exact tag and GitHub Release payload.
-
-Before canonical lexical activation:
-
-1. Create and verify a recoverable Wiki backup outside destructive profile scope.
-2. Review the exact existing-folder role mapping and rollback procedure.
-3. Enable lexical-only first and verify capture/recall against canonical data.
-
-Before semantic activation:
+Before optional semantic activation:
 
 1. Build a fresh isolated GBrain canary with approved model, dimensions, and
    credential reference.
 2. Verify semantic recall on synthetic or explicitly approved non-sensitive
    Markdown.
 3. Separately approve the exact live MCP source binding and ≤7-second timeout.
+4. Define and pass a local retrieval acceptance set. A canary proves plumbing,
+   not production usefulness; if the acceptance set fails, remain lexical-only.
 
 Explicit Windows reparse-point coverage remains desirable where the CI runner
 permits it, but the documented threat model does not claim adversarial
