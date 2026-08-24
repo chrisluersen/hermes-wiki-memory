@@ -31,8 +31,8 @@ Acceptance:
 
 Status: provider subclassing, setup, initialization, prefetch, pre-compression,
 session switching/end, memory/delegation hooks, degraded prompt text, and
-shutdown have behavioral coverage. A disposable installed-package restart test
-remains release-gated.
+shutdown have behavioral coverage. The exact merged commit also passed a
+disposable installed-package lexical-only activation and reload test.
 
 ### P0.2 Resolve one Wiki configuration everywhere
 
@@ -193,8 +193,10 @@ Acceptance:
 Status: initialization-free canonical Wiki discovery, secret-free rebuild
 manifest, temporary tree/Git/lexical restore verification, and idempotent
 plugin-code removal are implemented. Hermes sessions remain outside plugin
-ownership. A representative private-Wiki restore plus keyed semantic rebuild is
-approval-gated.
+ownership. A representative private-Wiki restore is approval-gated before
+canonical activation; a separate isolated semantic canary is approval-gated
+before semantic activation. Neither blocks an explicitly experimental lexical-
+capable release.
 
 ## P2 — Quality and release
 
@@ -232,9 +234,11 @@ After P0 and P1 pass:
 - publish a changelog entry;
 - tag the next compatible release.
 
-Status: candidate version `0.4.0` and release-facing documentation are prepared
-locally. PR publication, live recovery evidence, tag, and GitHub Release require
-separate approval.
+Status: version `0.4.0` is merged to `master`; PR publication and disposable
+installed-package validation are complete. Release-documentation publication,
+tag creation, and GitHub Release publication remain separate approval-gated
+effects. Live recovery and semantic evidence remain activation gates rather
+than experimental-release gates.
 
 ## Non-goals
 
@@ -251,10 +255,7 @@ This roadmap does not include:
 
 ## Scope ceiling
 
-Keep the implementation near:
-
-- 6–8 focused Python modules;
-- 20–30 meaningful behavioral tests;
-- one provider, one Wiki configuration model, and one shared GBrain connection
-  strategy;
-- no new persistent database.
+Keep one provider, one Wiki configuration model, and one shared GBrain
+connection strategy. Do not add a persistent database, daemon, migration
+engine, governance framework, or duplicated GBrain implementation. Add tests
+for behavior and regressions rather than targeting an arbitrary test count.
