@@ -117,6 +117,42 @@ def test_setup_pins_plugin_install_to_full_release_commit():
     assert "install the exact tag" not in readme
 
 
+def test_agents_entrypoint_routes_fresh_agents_through_safe_setup():
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    normalized_agents = normalized(agents)
+
+    read_order = [
+        "`README.md`",
+        "`SETUP.md`",
+        "`SECURITY.md`",
+        "`docs/WIKI-FOLDER-MAPPING.md`",
+        "`docs/RELIABILITY-ROADMAP.md`",
+    ]
+    positions = [agents.index(item) for item in read_order]
+    assert positions == sorted(positions)
+
+    required = [
+        "--ref 72eea8af5e3168b5ef793164b14506807107ba4c",
+        "--no-enable",
+        "disposable Hermes profile/Wiki first",
+        "fresh backup outside destructive profile scope",
+        "layout: adopt-existing",
+        "Activate **lexical-only** first",
+        "memory.wiki.gbrain_source` empty",
+        "fixed retrieval acceptance set",
+        "remain lexical-only",
+        "separate HITL effects",
+    ]
+    assert all(item.lower() in normalized_agents.lower() for item in required)
+
+    forbidden = [
+        "--ref v0.4.0",
+        "C:/Users/",
+        "production semantic activation is approved",
+    ]
+    assert not any(item.lower() in normalized_agents.lower() for item in forbidden)
+
+
 def test_relative_markdown_links_resolve():
     for document in [ROOT / "README.md", ROOT / "SETUP.md"]:
         text = document.read_text(encoding="utf-8")
