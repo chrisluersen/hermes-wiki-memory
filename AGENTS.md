@@ -11,6 +11,7 @@ Before installing, configuring, or changing anything, read in this order:
 3. `SECURITY.md` — secrets and private-reporting boundaries.
 4. `docs/WIKI-FOLDER-MAPPING.md` — adopt existing Wiki folders without moving content.
 5. `docs/RELIABILITY-ROADMAP.md` — implemented behavior versus optional future work.
+6. `CONTRIBUTING.md` — Python 3.11 test dependencies and the supported standalone test entrypoint.
 
 If repository prose conflicts with the live Hermes CLI or official Hermes documentation, verify the live command and stop before mutation. Do not improvise around an invalid command.
 
