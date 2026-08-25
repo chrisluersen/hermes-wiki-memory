@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Explicit one-time canonical workbench migration through repository-owned
+  `migration_cli.py plan|apply|verify|rollback`. Normal provider startup remains
+  non-destructive; `adopt-existing` remains available for compatibility.
+- Deterministic recursive inventory, exact plan SHA-256, collision/special-path
+  blockers, path-qualified Obsidian/Markdown link rewrite planning, and a human
+  plus machine-readable plan.
+- Apply gates requiring a verified external backup, isolated rehearsal, exact
+  plan/source hashes, external journal/lock, unchanged source state, explicit
+  confirmation, interruption-safe resume, and destination-overwrite refusal.
+- Independent final verification for exact accounting/hashes, canonical layout,
+  supported links/attachments, bounded lexical role checks, disposable capture
+  readiness, semantic inactivity, and backup-first rollback that retains the
+  migrated tree.
+
+### Documentation
+- Personal Hermes onboarding now recommends one approved migration into
+  `layout: workbench` rather than a permanent legacy/canonical mapping. Semantic
+  activation and cleanup remain separate; no startup menu, daemon, generalized
+  migration engine, or dual-layout synchronization was added.
+
 ## [0.4.0] - 2026-08-24
 
 ### Added

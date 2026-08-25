@@ -40,8 +40,8 @@ Within `Sources/`, use one nested rule: preserve the received source in
 This is the target configuration contract for the roadmap. It is not a claim
 that the current release already implements every field below.
 
-Existing Wikis must be adopted, not reorganized by force. A compatible mapping
-for a Wiki using the legacy role names is:
+Existing Wikis are adopted by default and never reorganized by normal plugin
+startup. A compatible mapping for a Wiki using the legacy role names is:
 
 ```yaml
 layout: adopt-existing
@@ -116,19 +116,51 @@ is not. Discovery and migration must preserve the exact on-disk spelling; do
 not rely on Windows case folding for portability to Linux or case-sensitive
 macOS volumes.
 
-## Migration rule
+## Explicit one-time migration rule
 
-Do not move existing content merely to make names prettier. A move can change
-Obsidian links, GBrain slugs, scripts, and external references. The safe order
-is:
+Do not move existing content merely to make names prettier. However, an explicit
+operator preference for one canonical layout may authorize a **one-time
+canonical migration** to the workbench. A move can change Obsidian links,
+GBrain slugs, scripts, and external references, so normal plugin startup never
+migrates. The safe lifecycle is plan → apply → verify → rollback.
+
+Migration planning must be read-only and must inventory every file, hidden path,
+attachment, path-qualified link/embed, collision, special filesystem object, and
+unknown root. Apply requires a verified external backup, successful isolated
+rehearsal, exact approved plan SHA-256, unchanged source-tree digest, external
+journal/lock, and explicit confirmation. Verification must prove byte
+accounting, planned rewrites, link/attachment integrity, canonical directories,
+lexical retrieval, capture readiness, and absent legacy roots. Rollback is
+backup-first and retains the migrated/failed tree until canonical recovery is
+verified.
+
+For the intended Personal Hermes migration, the deterministic role moves are:
+
+- `Topics/**` → `Knowledge/Topics/**`;
+- `Ideas/**` → `Knowledge/Ideas/**`;
+- `Clippings/**` → `Sources/Originals/**`;
+- `Notes/**` → `Sources/Notes/**`;
+- `Inbox/**` and `Projects/**` retain their roles;
+- `.obsidian/**` and attachment folders retain their paths unless an exact move
+  is separately justified;
+- archive candidates always require an operator decision.
+
+After successful migration and verification, use `layout: workbench`; do not
+maintain synchronized legacy and canonical layouts. Semantic activation remains
+separate and cleanup remains separate. No migration daemon or generalized
+schema engine is part of this contract.
+
+For users who keep `adopt-existing`, the earlier compatibility sequence remains:
 
 1. configure role mapping and exclusions;
 2. benchmark representative retrieval;
 3. add stable IDs and redirects lazily;
 4. harvest reusable project material into Knowledge;
 5. archive completed projects as bounded units;
-6. consider `Clippings` → `Sources/Originals` only if the usability benefit
-   justifies deterministic link rewriting, backup, rollback, and reindex tests.
+6. consider a one-time canonical migration only if the usability benefit
+   justifies deterministic link rewriting, backup, rehearsal, verification, and
+   rollback.
 
-This document is a product contract and compatibility guide. It does not
-authorize a live Wiki migration.
+This document is a product contract and compatibility guide. It does not itself
+authorize a live Wiki migration; exact plan/apply/activation approvals remain
+required.

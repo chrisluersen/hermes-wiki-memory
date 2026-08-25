@@ -29,9 +29,13 @@ If repository prose conflicts with the live Hermes CLI or official Hermes docume
 
 4. Follow `SETUP.md` exactly for disposable validation.
 5. Before canonical activation, create a fresh backup outside destructive profile scope and verify an isolated restore.
-6. Map the existing Wiki with `layout: adopt-existing`, exact on-disk spelling/case, and an existing capture directory. Do not create or move optional roles merely to match an example.
-7. Activate **lexical-only** first: keep `memory.wiki.gbrain_source` empty, enable without tool override, select provider `wiki`, and verify detailed health shows lexical recall and capture ready while semantic recall is false.
-8. Keep the backup, restored copy, and pre-activation config snapshot until verification is complete.
+6. For the intended Personal Hermes setup, perform a **one-time migration to the canonical workbench**. Normal plugin startup never migrates. Run `python migration_cli.py plan`, review the exact migration plan hash and blockers, then stop for separate apply approval.
+7. Apply only through `python migration_cli.py apply` with the exact approved plan SHA-256, verified backup evidence, successful isolated rehearsal evidence, an external journal, and an external lock.
+8. Run `python migration_cli.py verify`; require exact files/hashes, resolved links and attachments, canonical directories, lexical retrieval, disposable capture readiness, and no legacy roots. Use `python migration_cli.py rollback` only from a separately verified isolated restore and separate rollback approval.
+9. After successful verification, activate **lexical-only** with `layout: workbench`: keep `memory.wiki.gbrain_source` empty, enable without tool override, select provider `wiki`, and verify detailed health shows lexical recall and capture ready while semantic recall is false.
+10. Keep the backup, restored copy, exact migration plan hash, journal, verification result, retained failed/migrated tree, and pre-activation config snapshot until separately approved cleanup.
+
+`adopt-existing` remains supported for compatibility, but it is not the intended Personal Hermes end state. Do not present a startup choice menu or maintain synchronized legacy and canonical layouts.
 
 ## Semantic retrieval is optional
 
@@ -49,11 +53,12 @@ If the acceptance set fails, remain lexical-only. Do not lower thresholds, tune 
 
 - Never copy credentials, another machine's absolute paths, profile state, source IDs, or live GBrain/PGLite bytes into a new installation.
 - Never initialize Git in, reorganize, bulk-edit, or migrate the canonical Wiki merely for this plugin.
+- Never let normal provider startup migrate content. A one-time migration requires a verified external backup, isolated rehearsal, exact migration plan hash, explicit apply approval, independent verification, and rollback readiness.
 - Never index raw/binary `Clippings`, runtime directories, session exports, caches, `_meta`, or Projects without separate scope and retrieval evidence.
 - Never start, stop, migrate, reinitialize, or delete an existing GBrain owner/store without exact approval.
 - Never enable tool override for this provider.
 - Never claim semantic production readiness from infrastructure health alone.
-- Treat install, backup creation, restore, canonical activation, external embedding calls, MCP registration, gateway restart, semantic activation, and cleanup/deletion as separate HITL effects.
+- Treat install, backup creation, rehearsal restore, migration-plan approval, migration apply, rollback, canonical activation, external embedding calls, MCP registration, gateway restart, semantic activation, and cleanup/deletion as separate HITL effects.
 - Preserve all existing user work and fail closed on ambiguous paths, source scope, credentials, or ownership.
 
 ## Verification
@@ -62,7 +67,7 @@ For repository changes, run:
 
 ```bash
 python tests/run.py
-python -m py_compile __init__.py wiki_client.py recovery.py dashboard/plugin_api.py
+python -m py_compile __init__.py wiki_client.py recovery.py migration.py migration_cli.py dashboard/plugin_api.py
 hermes plugins doctor --ci .
 git diff --check
 ```

@@ -67,15 +67,188 @@ A `degraded` lexical-only state is expected until semantic source/timeout attest
 
 ### Canonical lexical-only activation
 
-After disposable validation, take a fresh recoverable backup of the canonical
-Wiki and restore it to an isolated directory. Verify representative bytes,
-governance files, and bounded lexical recall before touching the live profile.
-Then install the same exact plugin revision disabled in the intended profile,
-save an `adopt-existing` mapping using exact on-disk path case, keep
-`gbrain_source` empty, enable `wiki` without tool override, select
-`memory.provider: wiki`, and verify detailed health reports lexical recall and
-capture readiness while semantic recall remains false. Keep the restored copy
-and pre-activation config snapshot until activation is proven.
+After disposable validation, install the same exact plugin revision disabled in
+the intended profile. Complete the backup, rehearsal, apply, and verification
+procedure below before activation. After successful migration verification,
+save `layout: workbench` with the exact canonical paths, keep `gbrain_source`
+empty, enable `wiki` without tool override, select `memory.provider: wiki`, and
+verify detailed health reports lexical recall and capture readiness while
+semantic recall remains false. Keep the backup, restored copy, migration
+evidence, and pre-activation config snapshot until separately approved cleanup.
+
+### One-time Personal Wiki migration to the canonical workbench
+
+For the intended Personal Hermes installation, do not keep a permanent mapping
+between legacy folders and the preferred layout. Perform one explicit **one-time
+canonical migration** to:
+
+```text
+Inbox/
+Projects/
+Knowledge/
+Sources/Originals/
+Sources/Notes/
+Archive/
+_meta/
+```
+
+Normal plugin startup never migrates. The migration lifecycle is:
+
+```text
+plan → apply → verify → rollback
+```
+
+Planning is read-only. Write its outputs outside the canonical Wiki:
+
+```bash
+python migration_cli.py plan \
+  --wiki C:/path/to/wiki \
+  --decisions C:/path/to/evidence/migration-decisions.json \
+  --json-out C:/path/to/evidence/migration-plan.json \
+  --report-out C:/path/to/evidence/migration-plan.md
+```
+
+The plan recursively inventories files, hidden paths, attachments, links,
+embeds, case/Unicode collisions, Windows-reserved names, and unsupported link or
+filesystem objects. Unknown roots and ambiguous destinations remain blockers.
+After reviewing them, use an external JSON decision map. Each root may be
+`retain`, exact `map` with a safe relative `destination`, or
+`review-required`; invalid roots/actions/paths fail closed. Decisions are part
+of the exact plan SHA-256. Example:
+
+```json
+{"Mystery": {"action": "map", "destination": "Knowledge/Mystery"}}
+```
+
+Review the report and exact plan SHA-256; planning performs zero Wiki/config
+writes. Markdown files larger than 8 MiB block rewrite planning for explicit
+review rather than being loaded without a bound.
+
+Before apply, require all of these external artifacts:
+
+- a verified external backup containing the complete source tree;
+- a pristine isolated backup restore for rollback;
+- a separate successful isolated rehearsal Wiki;
+- backup evidence bound to the source-tree SHA-256;
+- rehearsal evidence bound to the source-tree SHA-256 and exact approved plan SHA-256;
+- an external append-only journal path; and
+- an external exclusive lock path.
+
+Create the backup/restore through the separately approved backup procedure.
+Backup evidence must include the stream-verified archive SHA-256 and pristine
+restore path:
+
+```json
+{"verified": true, "source_tree_sha256": "<sha256>", "backup_path": "C:/external/wiki-backup.tar.gz", "backup_sha256": "<archive-sha256>", "restore_path": "C:/external/backup-restore"}
+```
+
+Copy the pristine restore to a separate rehearsal Wiki, then exercise the exact
+plan through the existing apply command in rehearsal mode:
+
+```bash
+python migration_cli.py apply --rehearsal \
+  --wiki C:/external/rehearsal-wiki \
+  --plan C:/path/to/evidence/migration-plan.json \
+  --approved-plan-sha256 <approved-plan-sha256> \
+  --journal C:/path/to/evidence/rehearsal-journal.jsonl \
+  --lock C:/path/to/evidence/rehearsal.lock \
+  --rehearsal-result C:/path/to/evidence/rehearsal.json
+```
+
+The result binds `source_tree_sha256`, `plan_sha256`, `final_tree_sha256`,
+`rehearsal_wiki`, and `journal_path`. Canonical apply independently reruns
+verification against that Wiki and journal; a bare `verified: true` declaration
+is never sufficient.
+
+Apply only after separate approval of the exact plan hash:
+
+```bash
+python migration_cli.py apply \
+  --wiki C:/path/to/wiki \
+  --plan C:/path/to/evidence/migration-plan.json \
+  --approved-plan-sha256 <approved-plan-sha256> \
+  --backup-evidence C:/path/to/evidence/backup.json \
+  --rehearsal-evidence C:/path/to/evidence/rehearsal.json \
+  --journal C:/path/to/evidence/migration-journal.jsonl \
+  --lock C:/path/to/evidence/migration.lock \
+  --apply
+```
+
+Apply refuses source drift, blockers, destination overwrite, unsafe paths,
+wrong hashes, missing evidence, and lock contention. If interrupted, inspect the
+journal and rerun the same command with `--resume`; remaining sources and
+completed destinations are revalidated before another write.
+
+Independently verify after apply:
+
+```bash
+python migration_cli.py verify \
+  --wiki C:/path/to/wiki \
+  --plan C:/path/to/evidence/migration-plan.json \
+  --journal C:/path/to/evidence/migration-journal.jsonl \
+  --backup-evidence C:/path/to/evidence/backup.json \
+  --result-out C:/path/to/evidence/migration-verification.json \
+  --report-out C:/path/to/evidence/migration-verification.md \
+  --capture-probe
+```
+
+Verification checks exact accounting and hashes, canonical directories, removed
+legacy roots, supported path-qualified wikilinks/embeds/Markdown links,
+bounded lexical retrieval from Knowledge/Projects/Sources/Notes, disposable
+capture readiness, and semantic inactivity.
+`rollback_ready` is true only when verification independently revalidates the
+external backup artifact hash and pristine restore tree; without
+`--backup-evidence`, it remains false.
+
+Rollback is backup-first. It verifies the isolated restored tree before moving
+the migrated tree to a retained external path and restoring canonical bytes.
+It also retains the same-volume original hold after a successful swap; both
+copies remain cleanup-gated evidence:
+
+```bash
+python migration_cli.py rollback \
+  --wiki C:/path/to/wiki \
+  --backup-evidence C:/path/to/evidence/backup.json \
+  --expected-source-tree-sha256 <pre-migration-tree-sha256> \
+  --retained-migrated-tree C:/path/to/evidence/retained-migrated-tree \
+  --rollback
+```
+
+The migration does not initialize Git, start/stop GBrain, activate semantics, or
+delete the backup, rehearsal, plan, journal, verification evidence, or retained
+tree. Semantic activation remains separate and cleanup remains separate.
+
+After successful verification, save this provider configuration and activate it
+through the normal separately approved Hermes configuration path:
+
+```yaml
+memory:
+  provider: wiki
+  wiki:
+    layout: workbench
+    paths:
+      capture: Inbox
+      projects: Projects
+      knowledge: Knowledge
+      sources:
+        originals: Sources/Originals
+        processed: Sources/Notes
+      archive: Archive
+    gbrain_source: ""
+```
+
+## Personal Hermes migration prompt
+
+> Clone this repository and switch this session into its root. Read `AGENTS.md`.
+> I explicitly prefer a one-time migration to the canonical power-user
+> workbench layout rather than permanent `adopt-existing` mapping. Inventory my
+> Personal Wiki read-only, classify every existing path, create and verify an
+> external backup and isolated rehearsal restore, then produce an exact
+> hash-bound migration/link-rewrite/rollback plan. Stop for my approval before
+> changing the canonical Wiki. After approval, migrate once, verify bytes,
+> links, attachments, capture, and lexical retrieval, set `layout: workbench`,
+> and leave semantic activation and cleanup separately gated. Do not build a
+> daemon, dual-layout synchronization layer, or generalized migration framework.
 
 ## 2. Adopt an existing Wiki without moving content
 
@@ -237,7 +410,7 @@ uninstall is authorized by this guide.
 
 ```bash
 python tests/run.py
-python -m py_compile __init__.py wiki_client.py recovery.py dashboard/plugin_api.py
+python -m py_compile __init__.py wiki_client.py recovery.py migration.py migration_cli.py dashboard/plugin_api.py
 hermes plugins doctor --ci .
 ```
 

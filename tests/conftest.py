@@ -41,6 +41,18 @@ def recovery_module(monkeypatch):
 
 
 @pytest.fixture
+def migration_module(monkeypatch):
+    name = "wiki_migration_under_test"
+    sys.modules.pop(name, None)
+    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "migration.py")
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
 def plugin_module(monkeypatch):
     """Load the plugin package with the smallest supported Hermes contract."""
     for name in list(sys.modules):
