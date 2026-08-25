@@ -19,23 +19,31 @@ If repository prose conflicts with the live Hermes CLI or official Hermes docume
 
 1. Inspect the target Hermes profile, Wiki path, folder case, existing plugin/config state, and backup destination.
 2. Validate this repository and use a disposable Hermes profile/Wiki first.
-3. Install the published release commit **disabled**:
+3. For the intended Personal migration, install the migration-capable merged
+   provider commit **disabled**. `v0.4.0` remains the published runtime release,
+   but its peeled commit predates the repository-owned migration CLI. Run
+   `prepare_backup_evidence.py` from this separately reviewed checkout:
 
    ```bash
    hermes plugins install chrisluersen/hermes-wiki-memory \
-     --ref 72eea8af5e3168b5ef793164b14506807107ba4c \
+     --ref f4a408c3a84bb44ae0adc202dd395587b61087b7 \
      --no-enable
    ```
 
 4. Follow `SETUP.md` exactly for disposable validation.
-5. Before canonical activation, create a fresh backup outside destructive profile scope and verify an isolated restore.
+5. Before canonical activation, create a fresh Wiki-only backup outside
+   destructive profile scope with `prepare_backup_evidence.py create`, then
+   independently restore/verify it with `prepare_backup_evidence.py verify`.
 6. For the intended Personal Hermes setup, perform a **one-time migration to the canonical workbench**. Normal plugin startup never migrates. Run `python migration_cli.py plan`, review the exact migration plan hash and blockers, then stop for separate apply approval.
 7. Apply only through `python migration_cli.py apply` with the exact approved plan SHA-256, verified backup evidence, successful isolated rehearsal evidence, an external journal, and an external lock.
 8. Run `python migration_cli.py verify`; require exact files/hashes, resolved links and attachments, canonical directories, lexical retrieval, disposable capture readiness, and no legacy roots. Use `python migration_cli.py rollback` only from a separately verified isolated restore and separate rollback approval.
 9. After successful verification, activate **lexical-only** with `layout: workbench`: keep `memory.wiki.gbrain_source` empty, enable without tool override, select provider `wiki`, and verify detailed health shows lexical recall and capture ready while semantic recall is false.
 10. Keep the backup, restored copy, exact migration plan hash, journal, verification result, retained failed/migrated tree, and pre-activation config snapshot until separately approved cleanup.
 
-`adopt-existing` remains supported for compatibility, but it is not the intended Personal Hermes end state. Do not present a startup choice menu or maintain synchronized legacy and canonical layouts.
+`adopt-existing` remains supported for compatibility, but it is not the intended
+Personal Hermes end state. The two safe operator choices are map in place or
+migrate once; there is no overwrite mode. Do not present a startup choice menu
+or maintain synchronized legacy and canonical layouts.
 
 ## Semantic retrieval is optional
 
@@ -67,7 +75,7 @@ For repository changes, run:
 
 ```bash
 python tests/run.py
-python -m py_compile __init__.py wiki_client.py recovery.py migration.py migration_cli.py dashboard/plugin_api.py
+python -m py_compile __init__.py wiki_client.py recovery.py migration.py migration_cli.py prepare_backup_evidence.py dashboard/plugin_api.py
 hermes plugins doctor --ci .
 git diff --check
 ```

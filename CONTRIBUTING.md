@@ -31,7 +31,7 @@ The runner installs the minimal Hermes contract before pytest imports the reposi
 Also run:
 
 ```bash
-python -m py_compile __init__.py wiki_client.py recovery.py dashboard/plugin_api.py
+python -m py_compile __init__.py wiki_client.py recovery.py migration.py migration_cli.py prepare_backup_evidence.py dashboard/plugin_api.py
 node --check dashboard/dist/index.js
 ```
 

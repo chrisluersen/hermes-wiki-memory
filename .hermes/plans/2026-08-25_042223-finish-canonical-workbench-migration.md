@@ -8,6 +8,13 @@
 
 **Architecture to preserve:** One repository-owned `plan → apply → verify → rollback` workflow. Normal plugin startup remains non-destructive. Markdown remains canonical. GBrain remains separate, derived, and inactive. `adopt-existing` remains compatibility behavior, not the intended Personal Hermes end state.
 
+> **Repository implementation status: complete.** Merged commit:
+> `f4a408c3a84bb44ae0adc202dd395587b61087b7` (PR #10). Local and
+> post-merge Ubuntu/Windows verification passed. Remaining work is
+> Personal-Hermes-only and begins with a separately approved read-only inventory
+> and operator choice between mapping in place and the preferred one-time
+> migration. No live Personal Wiki effect is authorized by this closeout.
+
 ---
 
 ## Scope-control rule

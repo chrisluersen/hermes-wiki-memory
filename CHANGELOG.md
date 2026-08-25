@@ -19,12 +19,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   supported links/attachments, bounded lexical role checks, disposable capture
   readiness, semantic inactivity, and backup-first rollback that retains the
   migrated tree.
+- Separate `prepare_backup_evidence.py create` and `verify` commands for a
+  Wiki-only ZIP, isolated exact-tree restore, and migration-compatible
+  `backup.json` evidence without following links or overwriting artifacts.
 
 ### Documentation
 - Personal Hermes onboarding now recommends one approved migration into
   `layout: workbench` rather than a permanent legacy/canonical mapping. Semantic
   activation and cleanup remain separate; no startup menu, daemon, generalized
   migration engine, or dual-layout synchronization was added.
+- Setup now names both safe operator choices—map in place or migrate once—while
+  explicitly rejecting an overwrite mode and pinning Personal installation to
+  the migration-capable merged commit.
 
 ## [0.4.0] - 2026-08-24
 

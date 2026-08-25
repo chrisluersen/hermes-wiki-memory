@@ -8,6 +8,14 @@
 
 **Tech stack:** Python 3.11 standard library where practical; existing repository containment/recovery/locking helpers; pytest synthetic fixtures; Hermes plugin doctor; Ubuntu and Windows CI.
 
+> **Repository implementation status: complete.** Merged commit:
+> `f4a408c3a84bb44ae0adc202dd395587b61087b7` (PR #10). Local and
+> post-merge Ubuntu/Windows verification passed. Remaining work is
+> Personal-Hermes-only: exact Wiki root/mode selection, backup creation,
+> isolated restore, inventory/decisions, rehearsal, plan approval, apply,
+> verification, lexical-only activation, optional semantics, and cleanup—each
+> under its separately stated HITL gate.
+
 ---
 
 ## Desired end state
