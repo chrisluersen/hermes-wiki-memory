@@ -217,7 +217,38 @@ def test_plans_mark_repository_work_complete_and_personal_work_remaining():
     corpus = original + "\n" + finish
     assert "Repository implementation status: complete" in corpus
     assert "Merged commit: `f4a408c3a84bb44ae0adc202dd395587b61087b7`" in corpus
+    assert "Repository handoff status: complete" in corpus
+    assert "`0adba55c4ad9756ecec54217190f8aaef566ba96` (PR #11)" in corpus
     assert "Remaining work is Personal-Hermes-only" in corpus
+    assert "Repository publication and the real Personal Wiki migration remain separate future gates" not in finish
+
+
+def test_setup_handles_current_plugin_scanner_false_positive_without_disabling_it_permanently():
+    setup = normalized((ROOT / "SETUP.md").read_text(encoding="utf-8"))
+    agents = normalized((ROOT / "AGENTS.md").read_text(encoding="utf-8"))
+    corpus = setup + "\n" + agents
+    required = [
+        "instruction-bearing repository",
+        "dangerous verdict",
+        "hermes config get plugins.scan_on_install",
+        "hermes config set plugins.scan_on_install false",
+        "hermes config unset plugins.scan_on_install",
+        "hermes config set plugins.scan_on_install true",
+        "install_reviewed_wiki_plugin() (",
+        "set -e",
+        "PROFILE_NAME=${1:?pass the exact active profile name}",
+        "trap restore_plugin_scan EXIT",
+        "hermes config set plugins.scan_on_install \"$SCAN_PREVIOUS\"",
+        "test \"$(git rev-parse HEAD)\" = \"$REVIEWED_CHECKOUT_SHA\"",
+        "git status --porcelain",
+        "hermes profile show \"$PROFILE_NAME\"",
+        "install_reviewed_wiki_plugin wiki-test",
+    ]
+    assert all(item.lower() in corpus.lower() for item in required)
+    disabled = setup.index("hermes config set plugins.scan_on_install false")
+    installed = setup.index("hermes plugins install chrisluersen/hermes-wiki-memory")
+    verified = setup.index("git -C \"$PLUGIN_DIR\" rev-parse HEAD")
+    assert disabled < installed < verified
 
 
 def test_personal_migration_docs_are_single_path_non_destructive_and_gated():

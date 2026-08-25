@@ -15,6 +15,13 @@
 > isolated restore, inventory/decisions, rehearsal, plan approval, apply,
 > verification, lexical-only activation, optional semantics, and cleanup—each
 > under its separately stated HITL gate.
+>
+> **Repository handoff status: complete.** The executable Personal-Hermes
+> backup/install/setup handoff was merged at
+> `0adba55c4ad9756ecec54217190f8aaef566ba96` (PR #11), and post-merge
+> Ubuntu/Windows CI passed. Current Hermes's install scanner can false-positive
+> on this instruction-bearing repository; `SETUP.md` contains the verified,
+> reversible profile-local scanner exception and exact installed-SHA readback.
 
 ---
 
