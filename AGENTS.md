@@ -22,7 +22,12 @@ If repository prose conflicts with the live Hermes CLI or official Hermes docume
 3. For the intended Personal migration, install the migration-capable merged
    provider commit **disabled**. `v0.4.0` remains the published runtime release,
    but its peeled commit predates the repository-owned migration CLI. Run
-   `prepare_backup_evidence.py` from this separately reviewed checkout:
+   `prepare_backup_evidence.py` from this separately reviewed checkout. Current
+   Hermes may give this instruction-bearing repository a false-positive
+   `DANGEROUS` verdict during install. Follow `SETUP.md`'s bounded profile-local
+   scanner exception: record prior state, disable only for the exact reviewed
+   SHA install, restore it in a trap, then verify installed HEAD and cleanliness.
+   Do not leave scanning disabled:
 
    ```bash
    hermes plugins install chrisluersen/hermes-wiki-memory \

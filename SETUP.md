@@ -41,15 +41,60 @@ python tests/run.py
 hermes plugins doctor --ci C:/path/to/hermes-wiki-memory
 ```
 
-Create and select a disposable profile, then install the migration-capable
-merged 40-character commit **disabled**. Hermes intentionally requires a full
-SHA for `--ref`; a tag name is not accepted:
+Create and select a disposable profile. Current Hermes scans the complete Git
+tree during `plugins install`; this instruction-bearing repository can receive
+a `DANGEROUS` verdict from false-positive persistence matches in `AGENTS.md`,
+plans, and setup prose even after the exact source and runtime files have been
+reviewed. A dangerous verdict cannot be accepted with `--force`.
+
+Do not disable scanning globally or leave it disabled. After validating this
+exact checkout, record the active profile's prior value, install the immutable
+40-character commit **disabled** under a shell trap, and restore the prior
+setting even if installation fails. Hermes intentionally requires a full SHA
+for `--ref`; a tag name is not accepted:
 
 ```bash
 hermes profile create wiki-test --no-skills
 hermes profile use wiki-test
-hermes plugins install chrisluersen/hermes-wiki-memory --ref f4a408c3a84bb44ae0adc202dd395587b61087b7 --no-enable
+
+install_reviewed_wiki_plugin() (
+  set -e
+  PROFILE_NAME=${1:?pass the exact active profile name}
+  REVIEWED_CHECKOUT_SHA="REPLACE_WITH_REVIEWED_CURRENT_CHECKOUT_40_CHARACTER_SHA"
+  test "$(git rev-parse HEAD)" = "$REVIEWED_CHECKOUT_SHA"
+  test -z "$(git status --porcelain)"
+
+  SCAN_WAS_SET=true
+  SCAN_PREVIOUS=$(hermes config get plugins.scan_on_install 2>/dev/null) || SCAN_WAS_SET=false
+  restore_plugin_scan() {
+    if [ "$SCAN_WAS_SET" = true ]; then
+      hermes config set plugins.scan_on_install "$SCAN_PREVIOUS"
+    else
+      hermes config unset plugins.scan_on_install
+    fi
+  }
+  trap restore_plugin_scan EXIT
+  hermes config set plugins.scan_on_install false
+  hermes plugins install chrisluersen/hermes-wiki-memory --ref f4a408c3a84bb44ae0adc202dd395587b61087b7 --no-enable
+  restore_plugin_scan
+  trap - EXIT
+
+  PROFILE_PATH=$(hermes profile show "$PROFILE_NAME" | python -c "import sys; print(next(line.split(':', 1)[1].strip() for line in sys.stdin if line.startswith('Path:')))" )
+  PLUGIN_DIR="$PROFILE_PATH/plugins/wiki"
+  test "$(git -C "$PLUGIN_DIR" rev-parse HEAD)" = "f4a408c3a84bb44ae0adc202dd395587b61087b7"
+  test -z "$(git -C "$PLUGIN_DIR" status --porcelain)"
+)
+install_reviewed_wiki_plugin wiki-test
 ```
+
+If `plugins.scan_on_install` was explicitly `true`, the restoration performed
+above is equivalent to `hermes config set plugins.scan_on_install true`; if the
+key was absent, `hermes config unset plugins.scan_on_install` restores the
+default-on state without persisting a new setting. Stop if the scanner state
+cannot be restored or the installed Git checkout is not the exact clean commit.
+Apply the same bounded sequence in the intended Personal profile, passing its
+exact reviewed profile name to `install_reviewed_wiki_plugin`; never copy the
+disposable plugin directory or profile state.
 
 Confirm `hermes profile show wiki-test` identifies the disposable profile. Then
 configure it through `hermes memory setup wiki` (or the equivalent profile-local

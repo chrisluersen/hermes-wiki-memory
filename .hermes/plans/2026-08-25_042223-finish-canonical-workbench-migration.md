@@ -1,6 +1,11 @@
 # Finish Canonical Workbench Migration — Bounded Execution Plan
 
-> **For Hermes:** Continue from the current uncommitted worktree. This addendum narrows the unfinished work in `2026-08-24_211129-canonical-personal-wiki-workbench-migration.md`; the original architecture, safety boundaries, and publication gates remain binding. This plan authorizes safe local repository implementation and verification only. It does not authorize a real Wiki migration, commit, push, PR, merge, release mutation, configuration activation, credential use, semantic activation, cleanup, or deletion.
+> **For Hermes:** Repository implementation and handoff publication are
+> complete. Use this addendum as historical implementation evidence and follow
+> `AGENTS.md` plus `SETUP.md` for a new Personal installation. The original
+> architecture and safety boundaries remain binding. No real Personal Wiki
+> inventory, migration, configuration activation, credential use, semantic
+> activation, cleanup, or deletion is authorized by repository completion.
 
 **Goal:** Finish and verify the existing one-time Personal Wiki migration implementation without expanding it into a generalized migration system.
 
@@ -14,6 +19,13 @@
 > Personal-Hermes-only and begins with a separately approved read-only inventory
 > and operator choice between mapping in place and the preferred one-time
 > migration. No live Personal Wiki effect is authorized by this closeout.
+>
+> **Repository handoff status: complete.** PR #11 merged the executable
+> cold-start handoff at `0adba55c4ad9756ecec54217190f8aaef566ba96`; post-merge
+> Ubuntu/Windows CI and a fresh-clone bootstrap passed. Current Hermes can
+> false-positive on instruction-bearing repositories during plugin scanning;
+> `SETUP.md` records the verified profile-local disable/install/restore sequence
+> plus exact installed-SHA and clean-tree checks.
 
 ---
 
@@ -228,4 +240,8 @@ Do not infer approval for branch creation, push, PR, merge, tag, release, real W
 
 ## Completion boundary
 
-This addendum is complete when safe local repository work is verified and the exact commit payload is awaiting approval. Repository publication and the real Personal Wiki migration remain separate future gates.
+This addendum and repository publication are complete. Remaining work starts in
+the intended Personal Hermes profile and consists only of separately approved
+installation-specific effects: root/mode selection, backup/restore, inventory,
+rehearsal, exact plan approval, apply/verify, lexical-only activation, optional
+semantics, and cleanup. Repository completion never authorizes those effects.
