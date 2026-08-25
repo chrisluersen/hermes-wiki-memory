@@ -27,9 +27,12 @@ The provider never starts or stops GBrain and never falls back to one-shot GBrai
 ## 1. Validate source; install only a reviewed commit
 
 The `owner/repo` command installs repository state, not uncommitted working-tree
-bytes. Validate source without enabling it:
+bytes. Source validation requires Python 3.11 plus `fastapi`, `pyyaml`, and
+`pytest`. Install them in an isolated Python environment, then validate without
+enabling the plugin:
 
 ```bash
+python -m pip install fastapi pyyaml pytest
 python tests/run.py
 hermes plugins doctor --ci C:/path/to/hermes-wiki-memory
 ```

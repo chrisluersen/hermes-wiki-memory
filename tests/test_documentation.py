@@ -127,6 +127,7 @@ def test_agents_entrypoint_routes_fresh_agents_through_safe_setup():
         "`SECURITY.md`",
         "`docs/WIKI-FOLDER-MAPPING.md`",
         "`docs/RELIABILITY-ROADMAP.md`",
+        "`CONTRIBUTING.md`",
     ]
     positions = [agents.index(item) for item in read_order]
     assert positions == sorted(positions)
@@ -142,6 +143,7 @@ def test_agents_entrypoint_routes_fresh_agents_through_safe_setup():
         "fixed retrieval acceptance set",
         "remain lexical-only",
         "separate HITL effects",
+        "Python 3.11 test dependencies",
     ]
     assert all(item.lower() in normalized_agents.lower() for item in required)
 
@@ -151,6 +153,15 @@ def test_agents_entrypoint_routes_fresh_agents_through_safe_setup():
         "production semantic activation is approved",
     ]
     assert not any(item.lower() in normalized_agents.lower() for item in forbidden)
+
+
+def test_setup_bootstraps_clean_python_test_dependencies():
+    setup = normalized((ROOT / "SETUP.md").read_text(encoding="utf-8"))
+    assert "Source validation requires Python 3.11" in setup
+    assert "python -m pip install fastapi pyyaml pytest" in setup
+    assert setup.index("python -m pip install fastapi pyyaml pytest") < setup.index(
+        "python tests/run.py"
+    )
 
 
 def test_relative_markdown_links_resolve():
