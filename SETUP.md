@@ -1,7 +1,11 @@
-# Setup — Hermes Wiki Memory 0.4.0
+# Setup — Hermes Wiki Memory 0.4.0 runtime + merged migration tooling
 
-This guide covers the published experimental `0.4.0` prerelease and
-approval-gated activation. Release publication does not authorize a live Wiki
+This guide covers the published experimental `0.4.0` provider runtime plus the
+repository-owned migration tooling merged afterward at
+`f4a408c3a84bb44ae0adc202dd395587b61087b7`. Provider runtime files are
+byte-identical between those revisions. Install that immutable provider commit;
+run `prepare_backup_evidence.py` and the documentation/tests from the separately
+reviewed current checkout. Release publication does not authorize a live Wiki
 migration, credential use, or semantic MCP activation.
 
 ## Architecture
@@ -37,14 +41,14 @@ python tests/run.py
 hermes plugins doctor --ci C:/path/to/hermes-wiki-memory
 ```
 
-Create and select a disposable profile, then install the published tag's peeled
-40-character commit **disabled**. Hermes intentionally requires a full SHA for
-`--ref`; a tag name is not accepted:
+Create and select a disposable profile, then install the migration-capable
+merged 40-character commit **disabled**. Hermes intentionally requires a full
+SHA for `--ref`; a tag name is not accepted:
 
 ```bash
 hermes profile create wiki-test --no-skills
 hermes profile use wiki-test
-hermes plugins install chrisluersen/hermes-wiki-memory --ref 72eea8af5e3168b5ef793164b14506807107ba4c --no-enable
+hermes plugins install chrisluersen/hermes-wiki-memory --ref f4a408c3a84bb44ae0adc202dd395587b61087b7 --no-enable
 ```
 
 Confirm `hermes profile show wiki-test` identifies the disposable profile. Then
@@ -64,6 +68,27 @@ requires it. When testing is complete, restore the prior sticky profile with
 canonical Wiki during this procedure.
 
 A `degraded` lexical-only state is expected until semantic source/timeout attestation is configured.
+
+## 2. Choose the existing-Wiki path explicitly
+
+There are two safe operator-selected choices. They are not a startup menu and
+the provider never chooses or executes one automatically.
+
+### Option A — map in place
+
+Use `layout: adopt-existing` with exact existing folder names. This creates,
+moves, renames, and overwrites nothing. Continue at **Adopt an existing Wiki
+without moving content** below.
+
+### Option B — migrate once
+
+Use the explicit `plan → apply → verify → rollback` workflow, then activate
+`layout: workbench`. This is the intended Personal Hermes path.
+
+There is no overwrite mode. Destination overwrite is refused, collisions and
+unknown roots block planning, and source drift or missing backup/rehearsal
+evidence blocks apply. Existing destination content must be classified or
+resolved in a new reviewed plan; it is never replaced in place.
 
 ### Canonical lexical-only activation
 
@@ -98,7 +123,9 @@ Normal plugin startup never migrates. The migration lifecycle is:
 plan → apply → verify → rollback
 ```
 
-Planning is read-only. Write its outputs outside the canonical Wiki:
+Planning is read-only. Write its outputs outside the canonical Wiki. If the
+Wiki contains `.git`, retain `.git` explicitly in the reviewed decisions file;
+the migration accounts for hidden objects but never guesses their disposition:
 
 ```bash
 python migration_cli.py plan \
@@ -117,7 +144,10 @@ After reviewing them, use an external JSON decision map. Each root may be
 of the exact plan SHA-256. Example:
 
 ```json
-{"Mystery": {"action": "map", "destination": "Knowledge/Mystery"}}
+{
+  ".git": {"action": "retain"},
+  "Mystery": {"action": "map", "destination": "Knowledge/Mystery"}
+}
 ```
 
 Review the report and exact plan SHA-256; planning performs zero Wiki/config
@@ -134,12 +164,48 @@ Before apply, require all of these external artifacts:
 - an external append-only journal path; and
 - an external exclusive lock path.
 
-Create the backup/restore through the separately approved backup procedure.
-Backup evidence must include the stream-verified archive SHA-256 and pristine
-restore path:
+#### Create and independently verify the Wiki-only backup
+
+Backup creation and restore verification are separate HITL effects. Both output
+paths must be outside the canonical Wiki, must have existing parent
+directories, and must not already exist. The helper includes hidden paths and
+empty directories, so retain `.git` and its history when present. It refuses
+symlinks/reparse points, special objects, unsafe names, source drift, archive
+tampering, traversal, duplicate archive members, and overwrite.
+
+After separate backup-creation approval:
+
+```bash
+python prepare_backup_evidence.py create \
+  --wiki C:/path/to/wiki \
+  --archive C:/path/to/evidence/wiki-backup.zip \
+  --result-out C:/path/to/evidence/backup-creation.json
+```
+
+Optional read-only archive inspection:
+
+```bash
+python -m zipfile -t C:/path/to/evidence/wiki-backup.zip
+python -m zipfile -l C:/path/to/evidence/wiki-backup.zip
+```
+
+After separate isolated-restore approval:
+
+```bash
+python prepare_backup_evidence.py verify \
+  --wiki C:/path/to/wiki \
+  --creation-result C:/path/to/evidence/backup-creation.json \
+  --restore C:/path/to/evidence/backup-restore \
+  --evidence-out C:/path/to/evidence/backup.json
+```
+
+The helper independently stream-hashes the archive, safely restores it to a
+new directory, compares the exact migration inventory/tree hash, and writes the
+`backup.json` consumed by apply/verify/rollback. Backup evidence includes
+`backup_sha256` and `restore_path`:
 
 ```json
-{"verified": true, "source_tree_sha256": "<sha256>", "backup_path": "C:/external/wiki-backup.tar.gz", "backup_sha256": "<archive-sha256>", "restore_path": "C:/external/backup-restore"}
+{"verified": true, "source_tree_sha256": "<sha256>", "backup_path": "C:/external/wiki-backup.zip", "backup_sha256": "<archive-sha256>", "restore_path": "C:/external/backup-restore"}
 ```
 
 Copy the pristine restore to a separate rehearsal Wiki, then exercise the exact
@@ -237,6 +303,52 @@ memory:
     gbrain_source: ""
 ```
 
+Before changing configuration, separately approve and export the intended
+profile as the pre-activation snapshot:
+
+```bash
+hermes profile export <PERSONAL_PROFILE> \
+  --output C:/path/to/evidence/personal-profile-pre-wiki.tar.gz
+```
+
+Then apply the exact lexical-only configuration through Hermes's atomic config
+writer. Replace only the Wiki root/profile placeholder with the reviewed
+Personal values:
+
+```bash
+hermes profile use <PERSONAL_PROFILE>
+hermes config set --force memory.wiki.root C:/path/to/wiki
+hermes config set --force memory.wiki.layout workbench
+hermes config set --force memory.wiki.paths.capture Inbox
+hermes config set --force memory.wiki.paths.projects Projects
+hermes config set --force memory.wiki.paths.knowledge Knowledge
+hermes config set --force memory.wiki.paths.sources.originals Sources/Originals
+hermes config set --force memory.wiki.paths.sources.processed Sources/Notes
+hermes config set --force memory.wiki.paths.archive Archive
+hermes config set --force memory.wiki.gbrain_server wiki-lexical-only-unregistered
+hermes config set --force memory.wiki.gbrain_source ""
+hermes config set memory.provider wiki
+hermes plugins enable wiki --no-allow-tool-override
+```
+
+Read back exact saved state and runtime status:
+
+```bash
+hermes config get memory.wiki --json
+hermes config get memory.provider
+hermes plugins show wiki
+hermes memory status
+```
+
+Require the reviewed Wiki root, `layout: workbench`, canonical role paths,
+lexical recall true, capture ready true, and semantic recall remains false.
+`--force` only suppresses the core CLI's unknown-key notice for plugin-owned
+leaf settings; it does not replace the `memory.wiki` mapping because every
+write uses a dotted leaf path.
+If any fact differs, stop and use the retained migration evidence or separately
+approved rollback; do not activate GBrain or delete evidence to make health
+appear green.
+
 ## Personal Hermes migration prompt
 
 > Clone this repository and switch this session into its root. Read `AGENTS.md`.
@@ -250,7 +362,7 @@ memory:
 > and leave semantic activation and cleanup separately gated. Do not build a
 > daemon, dual-layout synchronization layer, or generalized migration framework.
 
-## 2. Adopt an existing Wiki without moving content
+## 3. Adopt an existing Wiki without moving content
 
 Example:
 
@@ -291,7 +403,7 @@ Archive/
 _meta/
 ```
 
-## 3. Configure optional shared GBrain semantic recall
+## 4. Configure optional shared GBrain semantic recall
 
 The provider uses Hermes's already-registered MCP tool:
 
@@ -325,7 +437,7 @@ Safety requirements:
 
 If any check fails, semantic calls are skipped and bounded lexical recall is used.
 
-## 4. Capture behavior
+## 5. Capture behavior
 
 Automatic events land only under the configured capture role:
 
@@ -343,7 +455,7 @@ Properties:
 - No automatic capture edits Topics, Ideas, Projects, Notes, Clippings, or other established pages.
 - Full transcripts remain canonical in Hermes.
 
-## 5. Retrieval policy
+## 6. Retrieval policy
 
 Lexical recall:
 
@@ -361,7 +473,7 @@ model; use OS ACLs to prevent untrusted mutation of the Wiki parent directories.
 
 Semantic GBrain recall wins when admitted and successful; all failures degrade to lexical recall.
 
-## 6. Health
+## 7. Health
 
 `available` requires:
 
@@ -375,7 +487,7 @@ Semantic GBrain recall wins when admitted and successful; all failures degrade t
 
 The dashboard is read-only and never calls lock-taking GBrain doctor commands.
 
-## 7. Backup and recovery
+## 8. Backup and recovery
 
 `backup_paths()` returns the canonical Markdown Wiki only. GBrain is derived and rebuilt.
 
@@ -390,7 +502,7 @@ Before activation:
 
 Never test recovery against the active PGLite store.
 
-## 8. Plugin-code removal
+## 9. Plugin-code removal
 
 Normal `hermes plugins remove wiki` removes the plugin install directory. The
 provider's tested removal helper refuses to proceed if a declared retained path
@@ -406,17 +518,17 @@ This is not a claim about full Hermes uninstall. Full Hermes uninstall can
 remove an in-root Wiki and therefore requires a verified backup. No full
 uninstall is authorized by this guide.
 
-## 9. Development verification
+## 10. Development verification
 
 ```bash
 python tests/run.py
-python -m py_compile __init__.py wiki_client.py recovery.py migration.py migration_cli.py dashboard/plugin_api.py
+python -m py_compile __init__.py wiki_client.py recovery.py migration.py migration_cli.py prepare_backup_evidence.py dashboard/plugin_api.py
 hermes plugins doctor --ci .
 ```
 
 CI runs the behavioral suite on Ubuntu and Windows. A symlink test may skip on Windows processes lacking symlink privileges.
 
-## 10. Verified evidence and remaining gates
+## 11. Verified evidence and remaining gates
 
 Completed release evidence:
 

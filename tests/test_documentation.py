@@ -104,16 +104,18 @@ def test_setup_requires_attested_shared_mcp_and_separate_live_approval():
     assert "Never test recovery against the active PGLite store" in setup
 
 
-def test_setup_pins_plugin_install_to_full_release_commit():
+def test_setup_pins_personal_install_to_migration_capable_merged_commit():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     setup = (ROOT / "SETUP.md").read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     import re
 
     refs = re.findall(r"hermes plugins install[^\n]+--ref\s+(\S+)", setup)
-    assert refs == ["72eea8af5e3168b5ef793164b14506807107ba4c"]
+    assert refs == ["f4a408c3a84bb44ae0adc202dd395587b61087b7"]
     assert re.fullmatch(r"[0-9a-f]{40}", refs[0])
     assert "--ref v0.4.0" not in setup
-    assert "published tag's peeled 40-character commit" in readme
+    assert "migration-capable merged commit" in readme
+    assert "f4a408c3a84bb44ae0adc202dd395587b61087b7" in agents
     assert "install the exact tag" not in readme
 
 
@@ -133,10 +135,10 @@ def test_agents_entrypoint_routes_fresh_agents_through_safe_setup():
     assert positions == sorted(positions)
 
     required = [
-        "--ref 72eea8af5e3168b5ef793164b14506807107ba4c",
+        "--ref f4a408c3a84bb44ae0adc202dd395587b61087b7",
         "--no-enable",
         "disposable Hermes profile/Wiki first",
-        "fresh backup outside destructive profile scope",
+        "fresh Wiki-only backup outside destructive profile scope",
         "one-time migration to the canonical workbench",
         "python migration_cli.py plan",
         "python migration_cli.py apply",
@@ -158,6 +160,64 @@ def test_agents_entrypoint_routes_fresh_agents_through_safe_setup():
         "production semantic activation is approved",
     ]
     assert not any(item.lower() in normalized_agents.lower() for item in forbidden)
+
+
+def test_setup_explains_map_versus_migrate_without_overwrite_mode():
+    setup = normalized((ROOT / "SETUP.md").read_text(encoding="utf-8"))
+    required = [
+        "Option A — map in place",
+        "Option B — migrate once",
+        "There is no overwrite mode",
+        "destination overwrite is refused",
+        "layout: adopt-existing",
+        "layout: workbench",
+    ]
+    assert all(item.lower() in setup.lower() for item in required)
+
+
+def test_setup_has_copyable_backup_restore_and_evidence_procedure():
+    setup = normalized((ROOT / "SETUP.md").read_text(encoding="utf-8"))
+    required = [
+        "prepare_backup_evidence.py create",
+        "prepare_backup_evidence.py verify",
+        "python -m zipfile -t",
+        "python -m zipfile -l",
+        "prepare_backup_evidence.py",
+        "backup_sha256",
+        "restore_path",
+        "retain `.git`",
+        "outside the canonical Wiki",
+    ]
+    assert all(item.lower() in setup.lower() for item in required)
+
+
+def test_setup_has_copyable_lexical_activation_and_readback_commands():
+    setup = normalized((ROOT / "SETUP.md").read_text(encoding="utf-8"))
+    required = [
+        "hermes profile export",
+        "hermes config set --force memory.wiki.layout workbench",
+        "hermes config set --force memory.wiki.paths.knowledge Knowledge",
+        "hermes config set --force memory.wiki.gbrain_source \"\"",
+        "hermes config set memory.provider wiki",
+        "hermes plugins enable wiki --no-allow-tool-override",
+        "hermes config get memory.wiki --json",
+        "hermes memory status",
+        "semantic recall remains false",
+    ]
+    assert all(item.lower() in setup.lower() for item in required)
+
+
+def test_plans_mark_repository_work_complete_and_personal_work_remaining():
+    original = normalized(
+        (ROOT / ".hermes" / "plans" / "2026-08-24_211129-canonical-personal-wiki-workbench-migration.md").read_text(encoding="utf-8")
+    )
+    finish = normalized(
+        (ROOT / ".hermes" / "plans" / "2026-08-25_042223-finish-canonical-workbench-migration.md").read_text(encoding="utf-8")
+    )
+    corpus = original + "\n" + finish
+    assert "Repository implementation status: complete" in corpus
+    assert "Merged commit: `f4a408c3a84bb44ae0adc202dd395587b61087b7`" in corpus
+    assert "Remaining work is Personal-Hermes-only" in corpus
 
 
 def test_personal_migration_docs_are_single_path_non_destructive_and_gated():

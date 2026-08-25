@@ -105,6 +105,17 @@ Existing installations that lack either exact setting remain safely lexical-only
 
 ## Existing Wiki: map for compatibility or migrate once
 
+There are two safe operator-selected modes:
+
+- **Option A — map in place:** use `layout: adopt-existing` and exact role
+  paths. No content is moved or renamed.
+- **Option B — migrate once:** run the explicit hash-bound migration, verify
+  it, then use `layout: workbench`.
+
+There is no overwrite mode. The migration refuses destination overwrite,
+collisions, source drift, missing evidence, and unresolved decisions. It keeps
+backup/restore/rehearsal evidence for separately approved rollback or cleanup.
+
 `adopt-existing` remains available for compatibility. It maps roles using exact
 on-disk spelling and case without moving content:
 
@@ -195,6 +206,9 @@ plugin.yaml             provider manifest
 __init__.py             Hermes MemoryProvider lifecycle and hooks
 wiki_client.py          shared MCP adapter, lexical recall, roles, capture, safe file operations
 recovery.py             rebuild manifest and temporary restore/removal verification
+migration.py            deterministic one-time migration operations
+migration_cli.py        explicit plan/apply/verify/rollback CLI
+prepare_backup_evidence.py  Wiki-only backup/restore evidence helper
 dashboard/              read-only health/count/activity UI
 SETUP.md                development and activation procedure
 docs/                   mapping, design boundaries, and reliability roadmap
@@ -207,13 +221,19 @@ CONTRIBUTING.md         product invariants and development workflow
 ## Operational setup and remaining gates
 
 `v0.4.0` is published, and representative lexical-only activation is complete.
-For another Hermes installation, follow [SETUP.md](SETUP.md): install the exact
-published tag's peeled 40-character commit (or another reviewed full SHA)
-disabled, validate in a disposable profile, and verify a recoverable
-backup/restore. For the intended Personal Hermes setup, approve one hash-bound
-migration plan, migrate once to `layout: workbench`, verify it, then enable
-lexical-only and inspect detailed health. Do not copy another installation's
-absolute paths, secrets, profile state, derived GBrain store, or source IDs.
+The migration tooling was added afterward and is merged on `master`. For the
+intended Personal setup, follow [SETUP.md](SETUP.md) and install the exact
+migration-capable merged commit
+`f4a408c3a84bb44ae0adc202dd395587b61087b7` disabled. Its provider runtime
+files are byte-identical to `v0.4.0`; the added surface is repository-owned
+migration tooling, tests, and documentation. Run
+`prepare_backup_evidence.py` from the separately reviewed current checkout.
+Validate in a disposable profile, create and independently verify a recoverable
+Wiki-only backup, then either map in place or approve one hash-bound migration
+plan. For the preferred Personal path, migrate once to `layout: workbench`,
+verify it, then enable lexical-only and inspect detailed health. Do not copy
+another installation's absolute paths, secrets, profile state, derived GBrain
+store, or source IDs.
 
 Before optional semantic activation:
 
