@@ -137,8 +137,13 @@ def test_agents_entrypoint_routes_fresh_agents_through_safe_setup():
         "--no-enable",
         "disposable Hermes profile/Wiki first",
         "fresh backup outside destructive profile scope",
-        "layout: adopt-existing",
-        "Activate **lexical-only** first",
+        "one-time migration to the canonical workbench",
+        "python migration_cli.py plan",
+        "python migration_cli.py apply",
+        "python migration_cli.py verify",
+        "python migration_cli.py rollback",
+        "exact migration plan hash",
+        "activate **lexical-only** with `layout: workbench`",
         "memory.wiki.gbrain_source` empty",
         "fixed retrieval acceptance set",
         "remain lexical-only",
@@ -153,6 +158,67 @@ def test_agents_entrypoint_routes_fresh_agents_through_safe_setup():
         "production semantic activation is approved",
     ]
     assert not any(item.lower() in normalized_agents.lower() for item in forbidden)
+
+
+def test_personal_migration_docs_are_single_path_non_destructive_and_gated():
+    readme = normalized((ROOT / "README.md").read_text(encoding="utf-8"))
+    setup = normalized((ROOT / "SETUP.md").read_text(encoding="utf-8"))
+    mapping = normalized(
+        (ROOT / "docs" / "WIKI-FOLDER-MAPPING.md").read_text(encoding="utf-8")
+    )
+    changelog = normalized((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
+    corpus = "\n".join([readme, setup, mapping, changelog])
+
+    required = [
+        "normal plugin startup never migrates",
+        "one-time canonical migration",
+        "plan → apply → verify → rollback",
+        "verified external backup",
+        "isolated rehearsal",
+        "exact approved plan SHA-256",
+        "--decisions",
+        "--rehearsal",
+        "--rehearsal-result",
+        "rehearsal_wiki",
+        "journal_path",
+        "layout: workbench",
+        "Sources/Originals",
+        "Sources/Notes",
+        "semantic activation remains separate",
+        "cleanup remains separate",
+    ]
+    assert all(item.lower() in corpus.lower() for item in required)
+    assert "choose Wiki setup mode" not in corpus
+    assert "migration daemon" in corpus
+
+
+def test_setup_requires_reproducible_rehearsal_not_a_verified_boolean():
+    setup = normalized((ROOT / "SETUP.md").read_text(encoding="utf-8"))
+    assert "apply --rehearsal" in setup
+    assert "independently reruns verification" in setup
+    assert "bare `verified: true`" in setup
+    assert "8 MiB" in setup
+    canonical = setup.split("### Canonical lexical-only activation", 1)[1].split(
+        "### One-time Personal Wiki migration", 1
+    )[0]
+    assert "after successful migration verification" in canonical.lower()
+    assert "layout: workbench" in canonical
+    assert "adopt-existing" not in canonical
+
+
+def test_setup_contains_copyable_personal_hermes_migration_prompt():
+    setup = normalized((ROOT / "SETUP.md").read_text(encoding="utf-8"))
+    required = [
+        "## Personal Hermes migration prompt",
+        "Inventory my Personal Wiki read-only",
+        "create and verify an external backup",
+        "isolated rehearsal restore",
+        "Stop for my approval before changing the canonical Wiki",
+        "set `layout: workbench`",
+        "semantic activation and cleanup separately gated",
+        "Do not build a daemon",
+    ]
+    assert all(item in setup for item in required)
 
 
 def test_setup_bootstraps_clean_python_test_dependencies():

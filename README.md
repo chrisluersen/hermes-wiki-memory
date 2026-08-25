@@ -31,6 +31,7 @@ This is **not a rewrite or fork of Hermes memory**. It implements Hermes's exist
   - the expected `mcp__<server>__recall` tool is registered under the matching toolset.
   Otherwise recall degrades to lexical Markdown search.
 - **Semantic role mapping.** `layout: adopt-existing` maps existing folders without creating, moving, or renaming them. Multiple knowledge folders are supported.
+- **Explicit one-time workbench migration.** `migration_cli.py` provides plan → apply → verify → rollback for users who want one canonical layout. Normal plugin startup never migrates, and destination overwrite is refused.
 - **Safe capture.** Session insights, delegation results, and explicit memory events go only to the configured capture role. Captures are immutable candidates, not automatic promotion into established knowledge.
 - **Stable and redacted events.** Event IDs are derived after forced Hermes secret redaction; replay preserves exact bytes; collisions fail closed.
 - **Contained atomic writes.** Page writes reject traversal, absolute paths, ADS/device names, unsafe extensions, and resolved escapes; per-page thread/process locking prevents lost cooperative updates.
@@ -102,9 +103,10 @@ The provider does **not** trust ambient source resolution, a sole source, a brai
 
 Existing installations that lack either exact setting remain safely lexical-only until their MCP configuration is separately reviewed and changed.
 
-## Adopt existing, do not migrate
+## Existing Wiki: map for compatibility or migrate once
 
-For an existing Wiki, map roles using exact on-disk spelling and case. A compatible example is:
+`adopt-existing` remains available for compatibility. It maps roles using exact
+on-disk spelling and case without moving content:
 
 ```yaml
 layout: adopt-existing
@@ -117,9 +119,10 @@ paths:
     processed: Notes
 ```
 
-No folder is created by role resolution. Automatic capture also refuses to create a missing capture directory. Create/scaffold operations and live migrations are separate, explicit actions.
+No folder is created by role resolution. Automatic capture also refuses to create a missing capture directory.
 
-For a new Wiki created by a separately approved scaffold, the recommended workbench is:
+For the intended Personal Hermes setup, use a **one-time canonical migration**
+instead of maintaining a permanent legacy/canonical mapping. The target is:
 
 ```text
 Inbox/
@@ -130,6 +133,13 @@ Sources/Notes/
 Archive/
 _meta/
 ```
+
+The migration is explicit and separately gated: plan → apply → verify →
+rollback. It requires a verified external backup, an isolated rehearsal, the
+exact approved plan SHA-256, an external journal/lock, and separate apply
+approval. Semantic activation remains separate, cleanup remains separate, and
+no migration daemon or synchronized second layout is created. See
+[SETUP.md](SETUP.md) for exact commands.
 
 ## Health states
 
@@ -199,10 +209,11 @@ CONTRIBUTING.md         product invariants and development workflow
 `v0.4.0` is published, and representative lexical-only activation is complete.
 For another Hermes installation, follow [SETUP.md](SETUP.md): install the exact
 published tag's peeled 40-character commit (or another reviewed full SHA)
-disabled, map the existing Wiki without moving content, verify a recoverable
-backup/restore, then enable lexical-only and inspect detailed health. Do not copy
-another installation's absolute paths, secrets, profile state, derived GBrain
-store, or source IDs.
+disabled, validate in a disposable profile, and verify a recoverable
+backup/restore. For the intended Personal Hermes setup, approve one hash-bound
+migration plan, migrate once to `layout: workbench`, verify it, then enable
+lexical-only and inspect detailed health. Do not copy another installation's
+absolute paths, secrets, profile state, derived GBrain store, or source IDs.
 
 Before optional semantic activation:
 

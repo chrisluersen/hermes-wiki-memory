@@ -65,6 +65,25 @@ exact-case validation, dashboard counts, setup persistence, and
 dashboard still use equivalent read-only resolvers rather than one importable
 cross-loader configuration object.
 
+### P0.2a Support an explicit one-time canonical workbench migration
+
+- Keep normal provider startup non-destructive.
+- Provide deterministic read-only planning, exact-hash/evidence-gated apply,
+  independent verification, and backup-first rollback.
+- Move legacy roles into one canonical workbench without maintaining a
+  synchronized second layout.
+- Preserve `adopt-existing` for compatibility while making the one-time
+  workbench migration the intended Personal Hermes path.
+
+Status: implemented in the repository-owned `migration.py` and thin
+`migration_cli.py`. Planning inventories the full synthetic tree and plans only
+deterministic moves/rewrites; apply requires verified external backup and
+isolated rehearsal evidence, exact plan/source hashes, external lock/journal,
+and explicit confirmation; verification checks accounting, links, canonical
+directories, lexical/capture behavior, and semantic inactivity; rollback first
+verifies an isolated restore and retains the migrated tree. Real Personal Wiki
+migration remains separately HITL-gated.
+
 ### P0.3 Use one GBrain owner
 
 - Replace one-`gbrain serve`-per-provider-process behavior with a shared-owner
@@ -257,6 +276,9 @@ This roadmap does not include:
 ## Scope ceiling
 
 Keep one provider, one Wiki configuration model, and one shared GBrain
-connection strategy. Do not add a persistent database, daemon, migration
-engine, governance framework, or duplicated GBrain implementation. Add tests
-for behavior and regressions rather than targeting an arbitrary test count.
+connection strategy. The bounded one-time migration module may plan/apply/
+verify/rollback an operator-approved layout transition; do not expand it into a
+persistent database, daemon, generalized migration/schema engine, governance
+framework, dual-layout synchronizer, or duplicated GBrain implementation. Add
+tests for behavior and regressions rather than targeting an arbitrary test
+count.
