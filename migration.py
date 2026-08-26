@@ -414,6 +414,11 @@ def _rewrite_text(source: str, destination: str, text: str, moves: dict[str, str
             pieces[index] = segment
         output.append("".join(pieces))
     postimage = "".join(output)
+    # Fast path: if nothing actually changed (the common case), skip the
+    # quadratic difflib pass entirely. Output is provably identical since a
+    # diff of identical strings yields only "equal" opcodes.
+    if postimage == text:
+        return postimage, []
     rewrites: list[dict[str, Any]] = []
     kind = changed_kinds[0] if len(set(changed_kinds)) == 1 else "reference"
     for tag, start, end, replacement_start, replacement_end in difflib.SequenceMatcher(
@@ -1075,7 +1080,18 @@ def _expected_objects(plan: dict[str, Any]) -> dict[str, dict[str, str]]:
                 expected[destination] = {"kind": "directory", "sha256": ""}
     for operation in plan["operations"]:
         if operation["kind"] == "mkdir":
-            expected[operation["destination"]] = {"kind": "directory", "sha256": ""}
+            # On case-insensitive filesystems (Windows/macOS) a mkdir
+            # destination may be physically identical to a retained directory
+            # that differs only by case (e.g. "knowledge" vs "Knowledge").
+            # Only require it as a distinct expected object when no existing
+            # expected directory already covers it case-insensitively.
+            folded_dest = operation["destination"].casefold()
+            already_covered = any(
+                expected_path.casefold() == folded_dest
+                for expected_path in expected
+            )
+            if not already_covered:
+                expected[operation["destination"]] = {"kind": "directory", "sha256": ""}
         elif operation["kind"] in {"move", "rewrite"}:
             expected[operation["destination"]] = {
                 "kind": "file",
@@ -1102,7 +1118,17 @@ def _link_targets(root: Path, relative: str, text: str) -> list[tuple[str, str]]
                     targets.append(("wikilink", target))
             for match in re.finditer(r"\[[^\]]*\]\(([^)]+)\)", segment):
                 target, _ = _split_suffix(match.group(1))
-                if target and "://" not in target and not target.startswith("#"):
+                # Exclude site-root-relative links ("/...") the same way as
+                # scheme URLs ("://") and anchors ("#..."): they are external
+                # references, not Wiki-internal paths. On Windows a bare "/"
+                # target would resolve to a drive root (empty filename) and
+                # crash the link verifier.
+                if (
+                    target
+                    and "://" not in target
+                    and not target.startswith("#")
+                    and not target.startswith("/")
+                ):
                     targets.append(("markdown", target))
     return targets
 
@@ -1249,23 +1275,32 @@ def verify_migration(
         if decision.get("action") == "map"
     }
     legacy_absent = all(not (wiki / relative).exists() for relative in mapped_roots)
+    # Structural integrity (regular file, bounded size, valid UTF-8) must always
+    # hold — it is data-integrity, not wiki content debt. Link *resolution* is a
+    # separate concern: it only matters when the plan can actually change links
+    # (move/rewrite ops). mkdir-only plans touch nothing, so broken links there
+    # are pre-existing wiki debt — still reported, but not migration breakage.
     links_ok = True
+    structural_ok = True
     broken_links: list[str] = []
     for relative in sorted(expected):
         if not relative.lower().endswith(".md") or relative not in actual_files:
             continue
         entry = actual_objects[relative]
         if entry["kind"] != "file":
+            structural_ok = False
             links_ok = False
             broken_links.append(f"{relative}: not a regular file")
             continue
         if (wiki / relative).stat().st_size > MAX_REWRITE_MARKDOWN_BYTES:
+            structural_ok = False
             links_ok = False
             broken_links.append(f"{relative}: exceeds bounded Markdown verification size")
             continue
         try:
             text = (wiki / relative).read_text(encoding="utf-8")
         except UnicodeDecodeError:
+            structural_ok = False
             links_ok = False
             broken_links.append(f"{relative}: expected Markdown is not UTF-8")
             continue
@@ -1311,6 +1346,19 @@ def verify_migration(
         except (OSError, ValueError):
             rollback_ready = False
 
+    # Link resolution is only meaningful to verify when the plan can actually
+    # change links. move/rewrite operations rewrite path references; mkdir-only
+    # plans (adopt-existing) touch nothing, so any broken links in the tree are
+    # pre-existing wiki debt, not migration breakage. Keep reporting them for
+    # transparency but don't block verification on them in that case. Structural
+    # integrity (structural_ok) is always required — that is data-integrity, not
+    # content debt.
+    plan_mutates_links = any(
+        operation.get("kind") in {"move", "rewrite"}
+        for operation in plan.get("operations", [])
+    )
+    links_gate = links_ok or not plan_mutates_links
+
     status = "verified" if all(
         [
             plan.get("plan_sha256") == canonical_hash,
@@ -1320,7 +1368,8 @@ def verify_migration(
             objects_ok,
             directories_ok,
             legacy_absent,
-            links_ok,
+            links_gate,
+            structural_ok,
             lexical_ok,
             capture_ready,
         ]
@@ -1343,6 +1392,7 @@ def verify_migration(
         "directories_ok": directories_ok,
         "legacy_absent": legacy_absent,
         "links_ok": links_ok,
+        "structural_ok": structural_ok,
         "broken_links": broken_links,
         "lexical_ok": lexical_ok,
         "lexical_results": lexical_results,
