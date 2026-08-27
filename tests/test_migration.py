@@ -501,6 +501,37 @@ def test_plan_rewrites_only_affected_links_outside_code(migration_module, tmp_pa
     ).hexdigest()
 
 
+def test_plan_rewrites_links_to_moved_directories(migration_module, tmp_path):
+    """Links that point at a moved DIRECTORY (e.g. ``[topics/](topics/)``
+    in index.md) must be rewritten too, not just links to moved files. A
+    directory move now populates the moves map, so a reference to the old
+    directory path resolves to its destination."""
+    wiki = tmp_path / "wiki"
+    index = wiki / "index.md"
+    old_dir = wiki / "Topics" / "alpha.md"
+    ideas_dir = wiki / "Ideas" / "beta.md"
+    index.parent.mkdir(parents=True, exist_ok=True)
+    old_dir.parent.mkdir(parents=True, exist_ok=True)
+    ideas_dir.parent.mkdir(parents=True, exist_ok=True)
+    index.write_text(
+        "[Topics/](Topics/) and [Ideas/](Ideas/)\n", encoding="utf-8"
+    )
+    old_dir.write_text("# alpha", encoding="utf-8")
+    ideas_dir.write_text("# beta", encoding="utf-8")
+
+    plan = migration_module.build_plan(wiki)
+    assert plan["status"] == "ready"
+    rewrite = next(item for item in plan["operations"] if item["source"] == "index.md")
+
+    assert rewrite["kind"] == "rewrite"
+    # Topics → Knowledge/Topics, Ideas → Knowledge/Ideas via the legacy map.
+    postimage = migration_module._apply_rewrites(
+        index.read_text(encoding="utf-8"), rewrite["rewrites"]
+    )
+    assert "[Topics/](Knowledge/Topics)" in postimage
+    assert "Knowledge/Ideas" in postimage
+
+
 def test_plan_does_not_duplicate_private_markdown_body(migration_module, tmp_path):
     wiki = tmp_path / "wiki"
     topic = wiki / "Topics" / "alpha.md"

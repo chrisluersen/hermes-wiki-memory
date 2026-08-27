@@ -138,11 +138,26 @@ def cmd_apply(args: argparse.Namespace) -> int:
         rehearsal=rehearsal_mode,
     )
     if rehearsal_mode:
+        source_tree = None
+        if args.backup_evidence:
+            try:
+                from migration import _load_json, _validate_backup_evidence
+
+                plan = _load_json(Path(args.plan), "migration plan")
+                _, restore = _validate_backup_evidence(
+                    Path(args.wiki),
+                    Path(args.backup_evidence),
+                    plan["source"]["tree_sha256"],
+                )
+                source_tree = restore
+            except (OSError, ValueError, KeyError):
+                source_tree = None
         verification = verify_migration(
             Path(args.wiki),
             Path(args.plan),
             journal_path=Path(args.journal),
             disposable_capture_probe=True,
+            source_tree=source_tree,
         )
         if verification["status"] != "verified":
             raise ValueError("rehearsal verification failed")

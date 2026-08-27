@@ -443,3 +443,133 @@ def test_rollback_restores_original_when_failed_restore_rename_is_refused(
     assert real_inventory(failed[0])["tree_sha256"] == plan["source"][
         "tree_sha256"
     ]
+
+
+def _apply_rehearsal(migration_module, wiki, plan, plan_path, tmp_path, journal_name="rehearsal-journal.jsonl"):
+    """Apply a plan to a throwaway copy (rehearsal mode) and return the
+    rehearsal wiki + journal, mirroring _write_rehearsal_evidence."""
+    rehearsal_wiki = tmp_path / journal_name.replace("journal", "wiki")
+    shutil.copytree(wiki, rehearsal_wiki)
+    journal = tmp_path / journal_name
+    migration_module.apply_plan(
+        rehearsal_wiki,
+        plan_path,
+        approved_plan_sha256=plan["plan_sha256"],
+        backup_evidence=None,
+        rehearsal_evidence=None,
+        journal_path=journal,
+        lock_path=tmp_path / "rehearsal.lock",
+        confirmed=True,
+        rehearsal=True,
+    )
+    return rehearsal_wiki, journal
+
+
+def test_verify_obsidian_wikilink_resolves_across_vault(migration_module, tmp_path):
+    """A [[path/id]] wikilink whose target exists by id/stem anywhere in the
+    vault resolves under the wiki's real Obsidian semantics. Filesystem-
+    relative resolution alone would falsely report it broken (the migration
+    verifier bug this regression test pins down)."""
+    wiki = tmp_path / "wiki"
+    files = {
+        "Inbox/capture.md": "capture",
+        "Knowledge/concepts/messaging-gateways.md": "---\nid: concepts/messaging-gateways\n---\ngateways",
+        "Ideas/beta.md": "See [[concepts/messaging-gateways]]",
+        "Clippings/raw.pdf": "raw",
+    }
+    for relative, content in files.items():
+        path = wiki / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    plan = migration_module.build_plan(wiki)
+    assert plan["status"] == "ready"
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+
+    rehearsal_wiki, journal = _apply_rehearsal(
+        migration_module, wiki, plan, plan_path, tmp_path
+    )
+    result = migration_module.verify_migration(
+        rehearsal_wiki,
+        plan_path,
+        journal_path=journal,
+        source_tree=wiki,
+    )
+    assert result["status"] == "verified"
+    assert result["links_ok"] is True
+    assert result["migration_broken_links"] == []
+
+
+def test_verify_pre_existing_broken_link_does_not_block_with_source_tree(
+    migration_module, tmp_path
+):
+    """Broken links that already existed in the source tree are pre-existing
+    wiki debt: reported for transparency but NOT migration breakage. With a
+    source tree available, the link gate must pass even though broken_links
+    is non-empty."""
+    wiki = tmp_path / "wiki"
+    files = {
+        "Inbox/capture.md": "capture",
+        "Ideas/beta.md": "See [[missing/page]]",
+        "Clippings/raw.pdf": "raw",
+    }
+    for relative, content in files.items():
+        path = wiki / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    plan = migration_module.build_plan(wiki)
+    assert plan["status"] == "ready"
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+
+    rehearsal_wiki, journal = _apply_rehearsal(
+        migration_module, wiki, plan, plan_path, tmp_path
+    )
+    result = migration_module.verify_migration(
+        rehearsal_wiki,
+        plan_path,
+        journal_path=journal,
+        source_tree=wiki,
+    )
+    assert result["status"] == "verified"
+    assert result["links_ok"] is True
+    assert result["migration_broken_links"] == []
+    # Still reported for transparency.
+    assert any("missing/page" in item for item in result["broken_links"])
+
+
+def test_verify_blocks_migration_introduced_broken_link(migration_module, tmp_path):
+    """A link that resolved in the source tree but is broken in the final tree
+    IS migration breakage and must fail the link gate."""
+    wiki = tmp_path / "wiki"
+    files = {
+        "Inbox/capture.md": "capture",
+        "Topics/alpha.md": "# Alpha",
+        "Ideas/beta.md": "See [[Topics/alpha]]",
+        "Clippings/raw.pdf": "raw",
+    }
+    for relative, content in files.items():
+        path = wiki / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    plan = migration_module.build_plan(wiki)
+    assert plan["status"] == "ready"
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+
+    rehearsal_wiki, journal = _apply_rehearsal(
+        migration_module, wiki, plan, plan_path, tmp_path
+    )
+    # Simulate the rewriter emitting a broken target in the moved file: the
+    # link resolved in source (Topics/alpha.md existed) but is broken in final.
+    moved = rehearsal_wiki / "Knowledge" / "Ideas" / "beta.md"
+    moved.write_text("See [[Knowledge/Nowhere/ghost]]", encoding="utf-8")
+    result = migration_module.verify_migration(
+        rehearsal_wiki,
+        plan_path,
+        journal_path=journal,
+        source_tree=wiki,
+    )
+    assert result["status"] == "failed"
+    assert result["links_ok"] is False
+    assert any("ghost" in item for item in result["migration_broken_links"])
