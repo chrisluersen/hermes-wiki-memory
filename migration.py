@@ -505,6 +505,10 @@ def build_plan(
                     "rollback": {"restore_from_backup": entry["path"]},
                 }
             )
+            # Track directory moves so links that point at a moved directory
+            # (e.g. ``[governance/](governance/)`` in index.md) are rewritten
+            # too, not just links to moved files.
+            moves[entry["path"]] = destination
     for entry in file_entries:
         destination, kind = _target_path(entry["path"], normalized_decisions)
         if kind == "move":
@@ -941,6 +945,7 @@ def apply_plan(
             rehearsal_wiki,
             plan_path,
             journal_path=rehearsal_journal,
+            source_tree=restore_path,
         )
         if rehearsal_verification["status"] != "verified":
             raise ValueError("rehearsal verification does not match this plan")
@@ -1133,7 +1138,80 @@ def _link_targets(root: Path, relative: str, text: str) -> list[tuple[str, str]]
     return targets
 
 
-def _links_resolve(root: Path, relative: str, text: str) -> tuple[bool, list[str]]:
+def _build_link_resolution(root: Path) -> tuple[set[str], set[str], set[str], set[str]]:
+    """Build vault-wide Obsidian resolution sets, mirroring the wiki's own
+    ``lint_broken_links``: a wikilink resolves if its full path, leaf basename,
+    leaf stem, or canonical frontmatter ``id:`` matches any ``.md`` in the
+    vault (archived pages included). Returns (paths, basenames, stems, ids)
+    all lowercased for case-insensitive filesystems."""
+    sys_dirs = {".git", ".obsidian", ".llmwiki", "__pycache__", ".trash"}
+    paths: set[str] = set()
+    basenames: set[str] = set()
+    stems: set[str] = set()
+    ids: set[str] = set()
+    root = Path(root).resolve()
+    for p in root.rglob("*.md"):
+        if any(s in p.parts for s in sys_dirs):
+            continue
+        rel = p.relative_to(root).as_posix()
+        paths.add(rel)
+        paths.add(rel.lower())
+        basenames.add(p.name.lower())
+        stems.add(p.stem.lower())
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        fm = text.split("---", 2)
+        if len(fm) >= 3:
+            for line in fm[1].splitlines():
+                if line.startswith("id:"):
+                    v = line.split(":", 1)[1].strip().strip('"').strip("'")
+                    if v:
+                        ids.add(v.lower())
+                    break
+    return paths, basenames, stems, ids
+
+
+def _wikilink_resolves_obsidian(
+    resolution: tuple[set[str], set[str], set[str], set[str]] | None, target: str
+) -> bool:
+    """Resolve a wikilink target under the wiki's real Obsidian semantics:
+    full path, leaf basename, leaf stem, or canonical id (case-insensitive).
+    Fragments (``#section``), URL-like (``.``), and whitespace targets are not
+    broken. Returns True when the target resolves anywhere in the vault."""
+    if resolution is None:
+        return False
+    paths, basenames, stems, ids = resolution
+    t = target.strip()
+    if not t:
+        return True
+    base = t.split("#", 1)[0].strip()
+    if not base or "." in base or " " in base:
+        return True  # anchor, external, or URL-like target
+    b = base.replace("\\", "/")
+    if b in paths or b.lower() in paths:
+        return True
+    leaf = b.split("/")[-1]
+    if not leaf:
+        return True
+    if leaf in basenames or leaf.lower() in basenames:
+        return True
+    if Path(leaf).stem.lower() in stems:
+        return True
+    if b.lower() in ids:
+        return True
+    if Path(leaf).stem.lower() in ids:
+        return True
+    return False
+
+
+def _links_resolve(
+    root: Path,
+    relative: str,
+    text: str,
+    resolution: tuple[set[str], set[str], set[str], set[str]] | None = None,
+) -> tuple[bool, list[str]]:
     broken: list[str] = []
     resolved_root = root.resolve()
     for kind, target in _link_targets(root, relative, text):
@@ -1155,8 +1233,17 @@ def _links_resolve(root: Path, relative: str, text: str) -> tuple[bool, list[str
                 continue
             contained.append(resolved)
         if escaped and not contained:
+            # A wikilink whose filesystem-relative target escapes the vault may
+            # still be valid under the wiki's real Obsidian semantics (resolved
+            # by id/stem/basename across the vault). Only treat it as broken
+            # when it does not resolve that way either. Markdown links stay
+            # strictly filesystem-relative (a real path must stay in the vault).
+            if kind == "wikilink" and _wikilink_resolves_obsidian(resolution, target):
+                continue
             broken.append(f"{relative}: {target} escapes Wiki")
         elif not any(path.exists() for path in contained):
+            if kind == "wikilink" and _wikilink_resolves_obsidian(resolution, target):
+                continue
             broken.append(f"{relative}: {target}")
     return not broken, broken
 
@@ -1222,6 +1309,7 @@ def verify_migration(
     lexical_queries: list[tuple[str, str]] | None = None,
     disposable_capture_probe: bool = False,
     backup_evidence: Path | None = None,
+    source_tree: Path | None = None,
 ) -> dict[str, Any]:
     """Independently verify final state from plan bytes, not journal assertions."""
     wiki = Path(wiki).resolve()
@@ -1277,12 +1365,49 @@ def verify_migration(
     legacy_absent = all(not (wiki / relative).exists() for relative in mapped_roots)
     # Structural integrity (regular file, bounded size, valid UTF-8) must always
     # hold — it is data-integrity, not wiki content debt. Link *resolution* is a
-    # separate concern: it only matters when the plan can actually change links
-    # (move/rewrite ops). mkdir-only plans touch nothing, so broken links there
-    # are pre-existing wiki debt — still reported, but not migration breakage.
+    # separate concern: the migration only breaks links it actually rewrites
+    # (move/rewrite ops change path references). Broken links that already
+    # existed in the source tree are pre-existing wiki debt — still reported,
+    # but not migration breakage. When a source tree is available (backup
+    # restore or explicit source_tree), the gate fails only on links broken in
+    # the final tree that were NOT broken in the source tree.
     links_ok = True
     structural_ok = True
     broken_links: list[str] = []
+    migration_broken_links: list[str] = []
+
+    source_resolution = None
+    source_root = None
+    if source_tree is not None:
+        source_root = Path(source_tree).resolve()
+        source_resolution = _build_link_resolution(source_root)
+    # Derive the source tree from backup evidence when not given explicitly.
+    if source_resolution is None and backup_evidence is not None:
+        try:
+            _, restore = _validate_backup_evidence(
+                wiki, Path(backup_evidence), plan["source"]["tree_sha256"]
+            )
+            source_root = restore.resolve()
+            source_resolution = _build_link_resolution(source_root)
+        except (OSError, ValueError):
+            source_resolution = None
+            source_root = None
+    # Map each destination file back to its source path via plan operations so
+    # per-file broken-link comparison is path-correct across the move.
+    dest_to_source: dict[str, str] = {}
+    for operation in plan.get("operations", []):
+        if operation.get("kind") in {"move", "rewrite"} and operation.get("source"):
+            dest_to_source[operation["destination"]] = operation["source"]
+
+    final_resolution = _build_link_resolution(wiki)
+
+    def _broken_target(item: str) -> str:
+        # Strip "{relative}: " prefix and trailing " escapes Wiki" marker.
+        target = item.split(": ", 1)[1] if ": " in item else item
+        if target.endswith(" escapes Wiki"):
+            target = target[: -len(" escapes Wiki")]
+        return target.strip()
+
     for relative in sorted(expected):
         if not relative.lower().endswith(".md") or relative not in actual_files:
             continue
@@ -1304,9 +1429,40 @@ def verify_migration(
             links_ok = False
             broken_links.append(f"{relative}: expected Markdown is not UTF-8")
             continue
-        ok, broken = _links_resolve(wiki, relative, text)
-        links_ok = links_ok and ok
+        ok, broken = _links_resolve(wiki, relative, text, final_resolution)
         broken_links.extend(broken)
+        if ok:
+            continue
+        # Determine which of this file's broken links are migration-introduced:
+        # a link broken in the final tree whose target resolved in the source
+        # tree for the same logical file. Compare by target text, not path.
+        if source_resolution is None or source_root is None:
+            links_ok = False
+            migration_broken_links.extend(broken)
+            continue
+        source_relative = dest_to_source.get(relative, relative)
+        source_path = source_root / source_relative
+        if not source_path.is_file():
+            # No source counterpart (new file) — any broken link is introduced.
+            links_ok = False
+            migration_broken_links.extend(broken)
+            continue
+        try:
+            source_text = source_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            links_ok = False
+            migration_broken_links.extend(broken)
+            continue
+        _, source_broken = _links_resolve(
+            source_root, source_relative, source_text, source_resolution
+        )
+        source_targets = {_broken_target(item) for item in source_broken}
+        introduced = [
+            item for item in broken if _broken_target(item) not in source_targets
+        ]
+        if introduced:
+            links_ok = False
+            migration_broken_links.extend(introduced)
 
     if lexical_probe and lexical_queries:
         lexical_results = []
@@ -1346,18 +1502,23 @@ def verify_migration(
         except (OSError, ValueError):
             rollback_ready = False
 
-    # Link resolution is only meaningful to verify when the plan can actually
-    # change links. move/rewrite operations rewrite path references; mkdir-only
-    # plans (adopt-existing) touch nothing, so any broken links in the tree are
-    # pre-existing wiki debt, not migration breakage. Keep reporting them for
-    # transparency but don't block verification on them in that case. Structural
-    # integrity (structural_ok) is always required — that is data-integrity, not
-    # content debt.
+    # Link resolution only blocks when the migration itself introduced the
+    # breakage. move/rewrite operations rewrite path references; mkdir-only
+    # plans (adopt-existing) touch nothing. When a source tree was available,
+    # links_ok already reflects only migration-introduced broken links; when no
+    # source tree was available (no backup evidence, plain adopt), fall back to
+    # blocking on any broken link only when the plan can mutate links. Broken
+    # links are always reported for transparency. Structural integrity
+    # (structural_ok) is always required — that is data-integrity, not content
+    # debt.
     plan_mutates_links = any(
         operation.get("kind") in {"move", "rewrite"}
         for operation in plan.get("operations", [])
     )
-    links_gate = links_ok or not plan_mutates_links
+    if source_resolution is None:
+        links_gate = links_ok or not plan_mutates_links
+    else:
+        links_gate = links_ok
 
     status = "verified" if all(
         [
@@ -1394,6 +1555,7 @@ def verify_migration(
         "links_ok": links_ok,
         "structural_ok": structural_ok,
         "broken_links": broken_links,
+        "migration_broken_links": migration_broken_links,
         "lexical_ok": lexical_ok,
         "lexical_results": lexical_results,
         "capture_ready": capture_ready,
