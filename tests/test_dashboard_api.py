@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sqlite3
 import sys
 import types
 from pathlib import Path
@@ -275,3 +276,58 @@ def test_sections_empty_wiki(dashboard_module, tmp_path):
     assert sections["knowledge"]["total"] == 0
     assert sections["inbox"] == {"count": 0, "items": []}
     assert sections["archive"] == 0
+
+
+def _make_board(root: Path, name: str, tasks: list[tuple[str, str, str, int]]) -> None:
+    """Create a kanban board DB with (id, title, status, priority) tasks."""
+    db = root / "kanban" / "boards" / name / "kanban.db"
+    db.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT, status TEXT, "
+        "priority INTEGER, assignee TEXT, created_at REAL)"
+    )
+    for idx, (tid, title, status, priority) in enumerate(tasks):
+        conn.execute(
+            "INSERT INTO tasks (id, title, status, priority, assignee, created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (tid, title, status, priority, "default", 100.0 + idx),
+        )
+    conn.commit()
+    conn.close()
+
+
+def test_work_aggregates_open_tasks_across_boards(dashboard_module, monkeypatch, tmp_path):
+    hermes_root = tmp_path / "hermes"
+    monkeypatch.setattr(dashboard_module, "_hermes_root", lambda: hermes_root)
+    _make_board(hermes_root, "growth", [
+        ("t1", "Ship feature", "ready", 0),
+        ("t2", "Fix bug", "todo", 1),
+        ("t3", "Done thing", "done", 0),
+    ])
+    _make_board(hermes_root, "personal", [
+        ("t4", "Blocked task", "blocked", 2),
+        ("t5", "Ready task", "ready", 0),
+    ])
+
+    work = dashboard_module.get_work()
+
+    assert work["open_total"] == 4
+    assert work["by_status"] == {"ready": 2, "todo": 1, "blocked": 1}
+    # Both boards have a ready task, so all 4 open tasks are actionable.
+    assert work["available"] == 4
+    boards = {b["board"]: b for b in work["boards"]}
+    assert set(boards) == {"growth", "personal"}
+    assert boards["growth"]["open"] == 2
+    assert {t["title"] for t in boards["growth"]["tasks"]} == {"Ship feature", "Fix bug"}
+    # Done tasks excluded.
+    assert all(t["status"] != "done" for b in work["boards"] for t in b["tasks"])
+
+
+def test_work_no_boards(dashboard_module, monkeypatch, tmp_path):
+    hermes_root = tmp_path / "hermes"
+    monkeypatch.setattr(dashboard_module, "_hermes_root", lambda: hermes_root)
+
+    work = dashboard_module.get_work()
+
+    assert work == {"boards": [], "open_total": 0, "by_status": {}, "available": 0}
