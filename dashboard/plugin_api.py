@@ -33,6 +33,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Any, Optional
@@ -326,4 +327,75 @@ def get_sections() -> dict[str, Any]:
             "items": inbox_items,
         },
         "archive": md_count(wiki / values(paths.get("archive"), "Archive")[0]),
+    }
+
+
+@router.get("/work")
+def get_work() -> dict[str, Any]:
+    """Open kanban work across boards — the wiki dashboard's task surface.
+
+    Reads every board under the Hermes root ``kanban/boards/*/kanban.db`` and
+    returns tasks with open statuses (ready/todo/blocked, not done/archived),
+    newest first. Read-only; never dispatches, claims, or mutates.
+    """
+    root = _hermes_root()
+    boards_dir = root / "kanban" / "boards"
+    boards: list[dict[str, Any]] = []
+    if boards_dir.is_dir():
+        for board_dir in sorted(boards_dir.iterdir()):
+            if not board_dir.is_dir():
+                continue
+            db_path = board_dir / "kanban.db"
+            if not db_path.is_file():
+                continue
+            try:
+                conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+                conn.row_factory = sqlite3.Row
+                try:
+                    # Select only the columns that actually exist — older or
+                    # foreign board DBs may lack started_at/completed_at.
+                    cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
+                    wanted = [c for c in ("id", "title", "status", "priority", "assignee") if c in cols]
+                    order = "priority ASC, created_at DESC" if "created_at" in cols else "id ASC"
+                    tasks = conn.execute(
+                        f"SELECT {', '.join(wanted)} FROM tasks "
+                        f"WHERE status IN ('ready','todo','blocked') "
+                        f"ORDER BY {order}"
+                    ).fetchall()
+                finally:
+                    conn.close()
+            except Exception as exc:
+                log.warning("wiki dashboard: board %s unreadable: %s", board_dir.name, exc)
+                continue
+            if tasks:
+                boards.append(
+                    {
+                        "board": board_dir.name,
+                        "open": len(tasks),
+                        "tasks": [
+                            {
+                                "id": t["id"],
+                                "title": t["title"],
+                                "status": t["status"],
+                                "priority": t["priority"],
+                                "assignee": t["assignee"],
+                            }
+                            for t in tasks
+                        ],
+                    }
+                )
+    open_total = sum(b["open"] for b in boards)
+    by_status: dict[str, int] = {}
+    for b in boards:
+        for t in b["tasks"]:
+            by_status[t["status"]] = by_status.get(t["status"], 0) + 1
+    return {
+        "boards": boards,
+        "open_total": open_total,
+        "by_status": by_status,
+        # Boards with at least one ready task are "available" — their open
+        # tasks are actionable without unblocking anything first.
+        "available": sum(
+            b["open"] for b in boards if any(t["status"] == "ready" for t in b["tasks"])
+        ),
     }
