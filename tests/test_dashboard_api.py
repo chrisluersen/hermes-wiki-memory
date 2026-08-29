@@ -205,3 +205,73 @@ def test_counts_follow_configured_semantic_roles(dashboard_module, tmp_path):
         "archive": 1,
     }
     assert counts["total"] == 7
+
+
+def test_sections_breakdown_per_project_and_knowledge(dashboard_module, tmp_path):
+    wiki = tmp_path / "wiki"
+    for relative in (
+        "Projects/Personal/coffee.md",
+        "Projects/Personal/recipes/brew.md",
+        "Projects/Work/companies/acme.md",
+        "Topics/concepts/alpha.md",
+        "Topics/entities/beta.md",
+        "Ideas/gamma.md",
+        "Inbox/wke_1.md",
+        "Inbox/wke_2.md",
+    ):
+        path = wiki / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("page", encoding="utf-8")
+    dashboard_module._test_config_module.load_config_readonly = lambda: {
+        "memory": {
+            "wiki": {
+                "root": str(wiki),
+                "layout": "adopt-existing",
+                "paths": {
+                    "capture": "Inbox",
+                    "projects": "Projects",
+                    "knowledge": ["Topics", "Ideas"],
+                    "archive": "Archive",
+                    "sources": {"originals": "Clippings", "processed": "Notes"},
+                },
+            }
+        }
+    }
+
+    sections = dashboard_module.get_sections()
+
+    # Projects: one entry per project dir, recursive page count.
+    project_names = {s["name"] for s in sections["projects"]["Projects"]}
+    assert project_names == {"Personal", "Work"}
+    personal = next(s for s in sections["projects"]["Projects"] if s["name"] == "Personal")
+    assert personal["pages"] == 2
+    assert personal["mtime"] > 0
+
+    # Knowledge: categories flattened across all knowledge roles.
+    assert set(sections["knowledge"]["categories"]) == {"concepts", "entities"}
+    assert sections["knowledge"]["categories"]["concepts"]["pages"] == 1
+    assert sections["knowledge"]["total"] == 3  # 1 + 1 + 1 (Ideas is a flat knowledge root)
+
+    # Inbox: pending captures, both present.
+    assert sections["inbox"]["count"] == 2
+    names = [item["name"] for item in sections["inbox"]["items"]]
+    assert set(names) == {"wke_1.md", "wke_2.md"}
+
+    # Archive missing → 0.
+    assert sections["archive"] == 0
+
+
+def test_sections_empty_wiki(dashboard_module, tmp_path):
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    dashboard_module._test_config_module.load_config_readonly = lambda: {
+        "memory": {"wiki": {"root": str(wiki), "layout": "adopt-existing"}}
+    }
+
+    sections = dashboard_module.get_sections()
+
+    assert sections["projects"] == {"Projects": []}
+    assert sections["knowledge"]["categories"] == {}
+    assert sections["knowledge"]["total"] == 0
+    assert sections["inbox"] == {"count": 0, "items": []}
+    assert sections["archive"] == 0

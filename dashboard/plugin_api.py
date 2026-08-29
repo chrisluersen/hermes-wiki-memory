@@ -253,3 +253,77 @@ def get_counts() -> dict[str, Any]:
         for role, relatives in role_paths.items()
     }
     return {"roles": roles, "total": sum(roles.values())}
+
+
+@router.get("/sections")
+def get_sections() -> dict[str, Any]:
+    """Per-section overview dashboards for the main parts of the wiki.
+
+    Drill-down under the aggregate ``/counts`` roles: each project dir with
+    its page count + last modification, each knowledge category with its page
+    count, and pending captures (inbox items, newest first). Read-only, live
+    from disk — no mirrors, no cache.
+    """
+    wiki = _wiki_root()
+    cfg = _wiki_config()
+    paths = cfg.get("paths", {}) if isinstance(cfg.get("paths", {}), dict) else {}
+
+    def values(value: Any, default: str) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value if str(item).strip()]
+        return [str(value or default)]
+
+    def subdir_stats(base: Path) -> list[dict[str, Any]]:
+        """One entry per subdirectory: name, recursive .md count, mtime."""
+        if not base.is_dir():
+            return []
+        out: list[dict[str, Any]] = []
+        for child in sorted(base.iterdir()):
+            if not child.is_dir():
+                continue
+            pages = sum(1 for p in child.rglob("*.md") if p.is_file())
+            try:
+                mtime = int(child.stat().st_mtime)
+            except OSError:
+                mtime = 0
+            out.append({"name": child.name, "pages": pages, "mtime": mtime})
+        return out
+
+    def md_count(base: Path) -> int:
+        if not base.is_dir():
+            return 0
+        return sum(1 for p in base.rglob("*.md") if p.is_file())
+
+    projects = {
+        rel: subdir_stats(wiki / rel) for rel in values(paths.get("projects"), "Projects")
+    }
+    knowledge_roles = values(paths.get("knowledge"), "Knowledge")
+    knowledge_categories = {}
+    for rel in knowledge_roles:
+        for entry in subdir_stats(wiki / rel):
+            knowledge_categories[entry["name"]] = entry
+
+    capture_paths = values(paths.get("capture"), "Inbox")
+    inbox_items: list[dict[str, Any]] = []
+    for rel in capture_paths:
+        base = wiki / rel
+        if base.is_dir():
+            for p in sorted(base.glob("*.md"), key=lambda f: f.stat().st_mtime, reverse=True):
+                try:
+                    mtime = int(p.stat().st_mtime)
+                except OSError:
+                    mtime = 0
+                inbox_items.append({"name": p.name, "mtime": mtime})
+
+    return {
+        "projects": projects,
+        "knowledge": {
+            "categories": knowledge_categories,
+            "total": sum(md_count(wiki / rel) for rel in knowledge_roles),
+        },
+        "inbox": {
+            "count": len(inbox_items),
+            "items": inbox_items,
+        },
+        "archive": md_count(wiki / values(paths.get("archive"), "Archive")[0]),
+    }
